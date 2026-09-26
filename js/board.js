@@ -392,13 +392,12 @@
       if (m.type === 'transfer') {
         an.dur = (m.dur || 230) / speed;
       } else {
-        const dir = this._pourDir(A, B);
+        const { dir, P } = this._placePour(A, B);
         const kx = dir > 0 ? g.w : 0;
         const V0 = volume(A.layers);
-        const bx = B.home.x + g.w / 2;
         an.dir = dir;
         an.kx = kx;
-        an.P = { x: bx - dir * g.w * 0.12, y: B.home.y - g.w * 1.15 };
+        an.P = P;
         an.V0 = V0;
         an.th0 = Math.max(0.7, g.theta(V0));
         an.th1 = Math.min(1.53, Math.max(an.th0 + 0.05, g.theta(V0 - m.n)));
@@ -417,13 +416,41 @@
       this.anims.push(an);
     }
 
-    _pourDir(A, B) {
+    /**
+     * Where the pouring tube's lip goes, and which way it tilts. The natural
+     * tilt points the tube back toward where it came from; with other pours
+     * in the air, pick the tilt (or a higher pour) whose footprint stays clear
+     * of theirs so simultaneous pours never cross.
+     */
+    _placePour(A, B) {
       const g = this.geo, bx = B.home.x + g.w / 2;
-      let dir = A.home.x <= B.home.x ? 1 : -1;
-      const reach = g.H * 0.8;
-      if (dir > 0 && bx - reach < 0) dir = -1;
-      else if (dir < 0 && bx + reach > this.cssW) dir = 1;
-      return dir;
+      const natural = A.home.x <= B.home.x ? 1 : -1;
+      const reach = g.H * 0.85;
+      // Horizontal and vertical extent of a tilted tube hanging off pivot P.
+      const footprint = (P, d) => ({
+        x0: d > 0 ? P.x - reach : P.x - g.w * 0.4,
+        x1: d > 0 ? P.x + g.w * 0.4 : P.x + reach,
+        y0: P.y - g.w,
+        y1: P.y + g.H * 0.75,
+      });
+      const others = this.anims
+        .filter((an) => an.type === 'pour' && !an.srcDone && an.P)
+        .map((an) => footprint(an.P, an.dir));
+      let best = null;
+      // One step up clears a pour at the normal height completely.
+      const step = g.H * 0.75 + g.w * 1.1;
+      for (let level = 0; level < 2; level++) {
+        for (const d of [natural, -natural]) {
+          const P = { x: bx - d * g.w * 0.12, y: B.home.y - g.w * 1.15 - level * step };
+          const f = footprint(P, d);
+          let cost = level * 10 + (d !== natural ? 1 : 0);
+          if (f.x0 < 0 || f.x1 > this.cssW) cost += 100;
+          for (const o of others) if (f.x0 < o.x1 && o.x0 < f.x1 && f.y0 < o.y1 && o.y0 < f.y1) cost += 50;
+          if (!best || cost < best.cost) best = { cost, dir: d, P };
+        }
+        if (best.cost < 10 * (level + 1)) break;
+      }
+      return best;
     }
 
     _step(an, dt) {
