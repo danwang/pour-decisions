@@ -83,7 +83,10 @@
       </div>
     </header>
     <div id="boardArea"></div>
-    <p class="caption" id="caption" hidden></p>
+    <div class="caption" id="caption" hidden>
+      <p id="captionText"></p>
+      <button class="caption-skip" id="skipTutorial" hidden>Skip tutorial</button>
+    </div>
     <div class="toast" id="toast" role="status" hidden>
       <span id="toastText"></span>
       <button class="toast-act" id="toastAct" hidden></button>
@@ -134,6 +137,20 @@
         <div><dt>Auto level</dt><dd id="endlessAuto">Easy</dd></div>
       </dl>
       <button class="btn primary wide" id="endlessStart">Start</button>
+    </div>
+  </div>
+
+  <!-- Jump ahead -->
+  <div class="overlay" id="jumpSheet" hidden>
+    <div class="sheet">
+      <button class="icon-btn close" data-close aria-label="Close"><svg><use href="#i-close"/></svg></button>
+      <p class="eyebrow">Skip ahead</p>
+      <h3 id="jumpTitle">Jump to Chapter 4?</h3>
+      <p class="sheet-copy" id="jumpCopy"></p>
+      <div class="sheet-actions">
+        <button class="btn ghost" data-close>Not now</button>
+        <button class="btn primary" id="jumpGo">Jump in</button>
+      </div>
     </div>
   </div>
 

@@ -180,6 +180,14 @@ svg { width: 24px; height: 24px; flex: none; }
 .chapter-head h3 { margin: 0; font: 800 20px/1.1 var(--display); }
 .chapter-head .eyebrow { margin-bottom: 4px; }
 .chapter-head .count { color: var(--muted); font-weight: 800; font-size: 13px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.jump {
+  flex: none;
+  min-height: 36px; padding-inline: 14px; border-radius: 12px;
+  background: rgba(255, 207, 90, 0.12); border: 1px solid rgba(255, 207, 90, 0.4);
+  color: var(--gold); font: 800 13px/1 var(--body);
+  transition: transform 90ms ease;
+}
+.jump:active { transform: scale(0.95); }
 .chapter-bar { height: 4px; border-radius: 4px; background: rgba(255, 255, 255, 0.07); margin-bottom: 14px; overflow: hidden; }
 .chapter-bar i { display: block; height: 100%; background: linear-gradient(90deg, var(--teal), var(--gold)); border-radius: 4px; }
 .grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px; }
@@ -261,6 +269,14 @@ svg { width: 24px; height: 24px; flex: none; }
   padding: 10px 14px; border-radius: 14px;
   background: rgba(23, 28, 67, 0.8); border: 1px solid var(--line);
   pointer-events: none;
+  display: flex; flex-direction: column; align-items: center; gap: 2px;
+}
+.caption p { margin: 0; }
+.caption-skip {
+  pointer-events: auto;
+  min-height: 36px; padding-inline: 12px;
+  color: var(--gold); font-size: 13px; font-weight: 800;
+  text-decoration: underline; text-underline-offset: 3px;
 }
 .toast {
   position: absolute; z-index: 4; left: 50%; bottom: 108px;

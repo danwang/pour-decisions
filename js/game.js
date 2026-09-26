@@ -18,6 +18,7 @@
     'Centrifuge', 'Catalyst', 'Chromatography', 'Crystal Garden', 'Grand Assay',
   ];
   const PER_CHAPTER = 20;
+  const FIRST_REGULAR = 6; // levels 1–5 are onboarding
 
   // ------------------------------------------------------------- storage --
 
@@ -266,7 +267,7 @@
       sec.innerHTML = `
         <div class="chapter-head">
           <div><p class="eyebrow">Chapter ${ch + 1} · ${from}–${to}</p><h3>${CHAPTERS[ch] || 'Chapter ' + (ch + 1)}</h3></div>
-          <span class="count">${got} / ${(to - from + 1) * 3} ★</span>
+          ${locked ? `<button class="jump" data-jump="${from}" data-ch="${ch}">Jump here</button>` : `<span class="count">${got} / ${(to - from + 1) * 3} ★</span>`}
         </div>
         <div class="chapter-bar"><i style="width:${(100 * got) / ((to - from + 1) * 3)}%"></i></div>`;
       const grid = document.createElement('div');
@@ -292,7 +293,8 @@
         grid.appendChild(btn);
       }
       sec.appendChild(grid);
-      if (locked) sec.style.opacity = '0.75';
+      const jump = sec.querySelector('.jump');
+      if (jump) jump.addEventListener('click', () => offerJump(from, ch));
       frag.appendChild(sec);
     }
     wrap.replaceChildren(frag);
@@ -515,8 +517,29 @@
   function caption(text) {
     const c = $('#caption');
     c.hidden = !text;
-    c.textContent = text || '';
+    $('#captionText').textContent = text || '';
+    $('#skipTutorial').hidden = !(G.mode === 'campaign' && G.puzzle && G.puzzle.kind === 'tutorial');
   }
+
+  /** Unlock everything up to level n and start it. Earlier levels stay playable for stars. */
+  function jumpTo(n) {
+    save.unlocked = Math.max(save.unlocked, n);
+    if (save.session && save.session.mode === 'campaign' && save.session.level < n) save.session = null;
+    persist();
+    startCampaign(n);
+  }
+  $('#skipTutorial').addEventListener('click', () => { Sound.tap(); jumpTo(FIRST_REGULAR); });
+
+  let jumpTarget = 0;
+  function offerJump(from, ch) {
+    jumpTarget = from;
+    $('#jumpTitle').textContent = `Jump to Chapter ${ch + 1}?`;
+    $('#jumpCopy').textContent =
+      `${CHAPTERS[ch] || 'This chapter'} starts at level ${from}, around ${C.rating(LEVELS[from - 1].s)}/10 difficulty. ` +
+      'Every level before it unlocks too, so you can go back for stars any time.';
+    openSheet('jumpSheet');
+  }
+  $('#jumpGo').addEventListener('click', () => { closeSheet('jumpSheet'); jumpTo(jumpTarget); });
 
   // ------------------------------------------------------------ tutorial --
 
