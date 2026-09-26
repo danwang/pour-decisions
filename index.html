@@ -1,0 +1,181 @@
+<meta charset="utf-8">
+<title>Pour Decisions</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<meta name="theme-color" content="#0F1330">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@600;700;800&family=Nunito:wght@600;700;800&display=swap">
+<link rel="stylesheet" href="style.css">
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <defs>
+    <symbol id="i-back" viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+    <symbol id="i-undo" viewBox="0 0 24 24"><path d="M9 7L4.5 11.5 9 16" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/><path d="M5 11.5h9a5 5 0 010 10h-2" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/></symbol>
+    <symbol id="i-restart" viewBox="0 0 24 24"><path d="M20 12a8 8 0 11-2.6-5.9" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/><path d="M18.5 2.5v4.2h-4.2" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+    <symbol id="i-hint" viewBox="0 0 24 24"><path d="M9 18h6M10 21.5h4M12 2.5a6.5 6.5 0 00-3.8 11.8c.5.4.8 1 .8 1.7v.5h6v-.5c0-.7.3-1.3.8-1.7A6.5 6.5 0 0012 2.5z" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+    <symbol id="i-tube" viewBox="0 0 24 24"><path d="M7 3h7M8.5 3v13a2 2 0 004 0V3" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/><path d="M18 9v8M14 13h8" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/></symbol>
+    <symbol id="i-gear" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3.2" fill="none" stroke="currentColor" stroke-width="2.2"/><path d="M12 2.5v3M12 18.5v3M21.5 12h-3M5.5 12h-3M18.7 5.3l-2.1 2.1M7.4 16.6l-2.1 2.1M18.7 18.7l-2.1-2.1M7.4 7.4L5.3 5.3" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></symbol>
+    <symbol id="i-help" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9.5" fill="none" stroke="currentColor" stroke-width="2.2"/><path d="M9.3 9.2a2.8 2.8 0 015.4 1c0 1.9-2.7 2.3-2.7 4.1" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/><circle cx="12" cy="17.6" r="1.3" fill="currentColor"/></symbol>
+    <symbol id="i-lock" viewBox="0 0 24 24"><rect x="5" y="10.5" width="14" height="10" rx="2.5" fill="currentColor"/><path d="M8 10.5V8a4 4 0 018 0v2.5" fill="none" stroke="currentColor" stroke-width="2.4"/></symbol>
+    <symbol id="i-star" viewBox="0 0 24 24"><path d="M12 2.8l2.8 5.8 6.3.9-4.6 4.4 1.1 6.3L12 17.2l-5.6 3 1.1-6.3L2.9 9.5l6.3-.9z" fill="currentColor" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round"/></symbol>
+    <symbol id="i-crown" viewBox="0 0 24 24"><path d="M3 8l4.5 4L12 5l4.5 7L21 8l-2 11H5z" fill="currentColor" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/></symbol>
+    <symbol id="i-grid" viewBox="0 0 24 24"><rect x="3.5" y="3.5" width="7" height="7" rx="2" fill="none" stroke="currentColor" stroke-width="2.2"/><rect x="13.5" y="3.5" width="7" height="7" rx="2" fill="none" stroke="currentColor" stroke-width="2.2"/><rect x="3.5" y="13.5" width="7" height="7" rx="2" fill="none" stroke="currentColor" stroke-width="2.2"/><rect x="13.5" y="13.5" width="7" height="7" rx="2" fill="none" stroke="currentColor" stroke-width="2.2"/></symbol>
+    <symbol id="i-infinity" viewBox="0 0 24 24"><path d="M12 12c-2-2.7-3.6-4-5.5-4a4 4 0 000 8c1.9 0 3.5-1.3 5.5-4zm0 0c2 2.7 3.6 4 5.5 4a4 4 0 000-8c-1.9 0-3.5 1.3-5.5 4z" fill="none" stroke="currentColor" stroke-width="2.2"/></symbol>
+    <symbol id="i-sun" viewBox="0 0 24 24"><rect x="3.5" y="5" width="17" height="15.5" rx="3" fill="none" stroke="currentColor" stroke-width="2.2"/><path d="M3.5 10h17M8 2.5v4M16 2.5v4" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/><circle cx="12" cy="15.2" r="1.8" fill="currentColor"/></symbol>
+    <symbol id="i-skip" viewBox="0 0 24 24"><path d="M5 5l9 7-9 7zM18 5v14" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linejoin="round" stroke-linecap="round"/></symbol>
+    <symbol id="i-close" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"/></symbol>
+  </defs>
+</svg>
+
+<div id="app">
+
+  <!-- Home -->
+  <section id="home" class="screen active" aria-label="Home">
+    <div class="home-top">
+      <button class="icon-btn" id="helpBtn" aria-label="How to play"><svg><use href="#i-help"/></svg></button>
+      <button class="icon-btn" id="settingsBtn" aria-label="Settings"><svg><use href="#i-gear"/></svg></button>
+    </div>
+    <div class="brand">
+      <h1 class="wordmark"><span>Pour</span><span>Decisions</span></h1>
+      <p class="tagline">Sort every tube into a single color.</p>
+    </div>
+    <div class="demo-wrap"><canvas id="demo" aria-hidden="true"></canvas></div>
+    <div class="home-actions">
+      <button class="btn primary big" id="playBtn">
+        <span class="btn-label" id="playLabel">Play</span>
+        <span class="btn-sub" id="playSub">Level 1</span>
+      </button>
+      <div class="mode-row">
+        <button class="mode" id="levelsBtn"><svg><use href="#i-grid"/></svg><span>Levels</span><small id="starsTotal">0 ★</small></button>
+        <button class="mode" id="endlessBtn"><svg><use href="#i-infinity"/></svg><span>Endless</span><small id="endlessSub">Auto</small></button>
+        <button class="mode" id="dailyBtn"><svg><use href="#i-sun"/></svg><span>Daily</span><small id="dailySub">New</small></button>
+      </div>
+    </div>
+  </section>
+
+  <!-- Level select -->
+  <section id="levels" class="screen" aria-label="Levels">
+    <header class="bar">
+      <button class="icon-btn" data-back aria-label="Back"><svg><use href="#i-back"/></svg></button>
+      <h2>Levels</h2>
+      <span class="bar-stat" id="levelsStars">0 / 600 ★</span>
+    </header>
+    <div class="levels-scroll" id="levelsScroll"></div>
+  </section>
+
+  <!-- Game -->
+  <section id="game" class="screen" aria-label="Puzzle">
+    <canvas id="board"></canvas>
+    <header class="hud">
+      <button class="icon-btn" id="gameBack" aria-label="Back"><svg><use href="#i-back"/></svg></button>
+      <div class="hud-title">
+        <h2 id="hudTitle">Level 1</h2>
+        <div class="hud-meta">
+          <span class="chip" id="hudKind" hidden>Boss</span>
+          <span class="meter" id="hudMeter" aria-label="Difficulty"></span>
+        </div>
+      </div>
+      <div class="hud-moves" aria-live="polite">
+        <strong id="hudMoves">0</strong>
+        <small id="hudPar">par 10</small>
+      </div>
+    </header>
+    <div id="boardArea"></div>
+    <p class="caption" id="caption" hidden></p>
+    <div class="toast" id="toast" role="status" hidden>
+      <span id="toastText"></span>
+      <button class="toast-act" id="toastAct" hidden></button>
+    </div>
+    <nav class="tools">
+      <button class="tool" id="undoBtn" aria-label="Undo (Z)"><svg><use href="#i-undo"/></svg><span>Undo</span></button>
+      <button class="tool" id="restartBtn" aria-label="Restart (R)"><svg><use href="#i-restart"/></svg><span>Restart</span></button>
+      <button class="tool" id="hintBtn" aria-label="Hint (H)"><svg><use href="#i-hint"/></svg><span>Hint</span></button>
+      <button class="tool" id="tubeBtn" aria-label="Add a tube"><svg><use href="#i-tube"/></svg><span>+ Tube</span><b class="badge" id="tubeBadge">1</b></button>
+      <button class="tool" id="skipBtn" aria-label="New puzzle" hidden><svg><use href="#i-skip"/></svg><span>New</span></button>
+    </nav>
+    <div class="loading" id="loading" hidden><div class="spinner"></div><p>Mixing a fresh puzzle…</p></div>
+  </section>
+
+  <!-- Win -->
+  <div class="overlay" id="winSheet" hidden>
+    <div class="sheet win">
+      <p class="eyebrow" id="winEyebrow">Level 12</p>
+      <h3 id="winTitle">Sorted!</h3>
+      <div class="stars" id="winStars">
+        <svg class="s"><use href="#i-star"/></svg><svg class="s"><use href="#i-star"/></svg><svg class="s"><use href="#i-star"/></svg>
+      </div>
+      <p class="win-note" id="winNote"></p>
+      <dl class="stats">
+        <div><dt>Moves</dt><dd id="winMoves">0</dd></div>
+        <div><dt>Par</dt><dd id="winPar">0</dd></div>
+        <div><dt>Time</dt><dd id="winTime">0:00</dd></div>
+      </dl>
+      <div class="sheet-actions">
+        <button class="btn ghost" id="winReplay">Replay</button>
+        <button class="btn primary" id="winNext">Next level</button>
+      </div>
+      <button class="link-btn" id="winMenu">Back to menu</button>
+    </div>
+  </div>
+
+  <!-- Endless -->
+  <div class="overlay" id="endlessSheet" hidden>
+    <div class="sheet">
+      <button class="icon-btn close" data-close aria-label="Close"><svg><use href="#i-close"/></svg></button>
+      <p class="eyebrow">Endless</p>
+      <h3>Fresh puzzles, forever</h3>
+      <p class="sheet-copy">Auto watches how you play and adjusts: clean solves near par make the next puzzle harder, hints and restarts ease off.</p>
+      <div class="tiers" id="tiers" role="radiogroup" aria-label="Difficulty"></div>
+      <dl class="stats small">
+        <div><dt>Solved</dt><dd id="endlessSolved">0</dd></div>
+        <div><dt>Streak</dt><dd id="endlessStreak">0</dd></div>
+        <div><dt>Auto level</dt><dd id="endlessAuto">Easy</dd></div>
+      </dl>
+      <button class="btn primary wide" id="endlessStart">Start</button>
+    </div>
+  </div>
+
+  <!-- Settings -->
+  <div class="overlay" id="settingsSheet" hidden>
+    <div class="sheet">
+      <button class="icon-btn close" data-close aria-label="Close"><svg><use href="#i-close"/></svg></button>
+      <p class="eyebrow">Settings</p>
+      <h3>Make it yours</h3>
+      <div class="toggles">
+        <label class="toggle"><span><b>Sound</b><small>Glass taps, pours and chimes</small></span><input type="checkbox" id="setSound"><i></i></label>
+        <label class="toggle"><span><b>Vibration</b><small>On devices that support it</small></span><input type="checkbox" id="setHaptics"><i></i></label>
+        <label class="toggle"><span><b>Color symbols</b><small>A shape on every color, for color-blind play</small></span><input type="checkbox" id="setSymbols"><i></i></label>
+        <label class="toggle"><span><b>Quick pours</b><small>Faster animations</small></span><input type="checkbox" id="setFast"><i></i></label>
+        <label class="toggle"><span><b>Reduce motion</b><small>Pour in place, no flying tubes</small></span><input type="checkbox" id="setReduced"><i></i></label>
+      </div>
+      <button class="btn danger wide" id="resetBtn">Reset progress</button>
+    </div>
+  </div>
+
+  <!-- Help -->
+  <div class="overlay" id="helpSheet" hidden>
+    <div class="sheet">
+      <button class="icon-btn close" data-close aria-label="Close"><svg><use href="#i-close"/></svg></button>
+      <p class="eyebrow">How to play</p>
+      <h3>One color per tube</h3>
+      <ol class="rules">
+        <li><b>Tap a tube</b> to pick it up, then <b>tap another</b> to pour. You can also drag from one to the other.</li>
+        <li>Liquid only pours onto <b>the same color</b> or into an <b>empty tube</b>.</li>
+        <li>The whole top color pours at once, as much as fits.</li>
+        <li>A tube is done when it's <b>full of one color</b>. It gets a cork.</li>
+      </ol>
+      <p class="sheet-copy"><b>Par</b> is the move count for three stars. Hints and the extra tube each cost a star, undo is free.</p>
+      <p class="sheet-copy keys">Keyboard: <kbd>1</kbd>–<kbd>9</kbd> pick tubes, <kbd>Z</kbd> undo, <kbd>R</kbd> restart, <kbd>H</kbd> hint.</p>
+      <button class="btn primary wide" data-close>Got it</button>
+    </div>
+  </div>
+
+</div>
+
+<script src="js/core.js"></script>
+<script src="js/levels.js"></script>
+<script src="js/audio.js"></script>
+<script src="js/board.js"></script>
+<script src="js/game.js"></script>

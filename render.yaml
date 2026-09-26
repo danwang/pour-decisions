@@ -1,0 +1,10 @@
+services:
+  - type: web
+    name: pour-decisions
+    runtime: static
+    buildCommand: node tools/test.js
+    staticPublishPath: .
+    headers:
+      - path: /*
+        name: Cache-Control
+        value: public, max-age=300
