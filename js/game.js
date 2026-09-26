@@ -28,7 +28,7 @@
     unlocked: 1,
     stars: {},
     best: {},
-    settings: { sound: true, haptics: true, symbols: false, fast: false, reduced: reducedDefault },
+    settings: { sound: false, haptics: true, symbols: false, fast: false, reduced: reducedDefault },
     endless: { auto: 1.2, choice: 'auto', solved: 0, streak: 0 },
     daily: { done: {}, streak: 0, last: '' },
     session: null,
@@ -321,11 +321,10 @@
       for (let n = from; n <= to; n++) got += save.stars[n] || 0;
       const sec = document.createElement('section');
       sec.className = 'chapter';
-      const locked = from > save.unlocked;
       sec.innerHTML = `
         <div class="chapter-head">
           <div><p class="eyebrow">Chapter ${ch + 1} · ${from}–${to}</p><h3>${CHAPTERS[ch] || 'Chapter ' + (ch + 1)}</h3></div>
-          ${locked ? `<button class="jump" data-jump="${from}" data-ch="${ch}">Jump here</button>` : `<span class="count">${got} / ${(to - from + 1) * 3} ★</span>`}
+          <span class="count">${got} / ${(to - from + 1) * 3} ★</span>
         </div>
         <div class="chapter-bar"><i style="width:${(100 * got) / ((to - from + 1) * 3)}%"></i></div>`;
       const grid = document.createElement('div');
@@ -334,25 +333,18 @@
         const L = LEVELS[n - 1];
         const btn = document.createElement('button');
         btn.className = 'level';
-        const isLocked = n > save.unlocked;
+        // Every level is open; ones past your progress are just quieter.
         const stars = save.stars[n] || 0;
-        if (isLocked) {
-          btn.classList.add('locked');
-          btn.innerHTML = `<svg><use href="#i-lock"/></svg>`;
-          btn.setAttribute('aria-label', `Level ${n}, locked`);
-        } else {
-          if (n === current && !save.stars[n]) btn.classList.add('current');
-          btn.innerHTML = `<span>${n}</span><span class="mini-stars">${[1, 2, 3].map((k) => `<svg class="${k <= stars ? 'on' : ''}"><use href="#i-star"/></svg>`).join('')}</span>`;
-          btn.setAttribute('aria-label', `Level ${n}, ${stars} stars`);
-          btn.addEventListener('click', () => { Sound.tap(); startCampaign(n); });
-        }
+        if (n === current && !stars) btn.classList.add('current');
+        else if (n > current && !stars) btn.classList.add('ahead');
+        btn.innerHTML = `<span>${n}</span><span class="mini-stars">${[1, 2, 3].map((k) => `<svg class="${k <= stars ? 'on' : ''}"><use href="#i-star"/></svg>`).join('')}</span>`;
+        btn.setAttribute('aria-label', `Level ${n}, ${stars} stars${n === current && !stars ? ', next up' : ''}`);
+        btn.addEventListener('click', () => { Sound.tap(); startCampaign(n); });
         if (L.k === 'boss') btn.insertAdjacentHTML('beforeend', '<svg class="crown"><use href="#i-crown"/></svg>');
         if (L.c === 5) btn.classList.add('cap5');
         grid.appendChild(btn);
       }
       sec.appendChild(grid);
-      const jump = sec.querySelector('.jump');
-      if (jump) jump.addEventListener('click', () => offerJump(from, ch));
       frag.appendChild(sec);
     }
     wrap.replaceChildren(frag);
@@ -579,7 +571,7 @@
     $('#skipTutorial').hidden = !(G.mode === 'campaign' && G.puzzle && G.puzzle.kind === 'tutorial');
   }
 
-  /** Unlock everything up to level n and start it. Earlier levels stay playable for stars. */
+  /** Move "next up" to level n and start it. */
   function jumpTo(n) {
     save.unlocked = Math.max(save.unlocked, n);
     if (save.session && save.session.mode === 'campaign' && save.session.level < n) save.session = null;
@@ -588,16 +580,6 @@
   }
   $('#skipTutorial').addEventListener('click', () => { Sound.tap(); jumpTo(FIRST_REGULAR); });
 
-  let jumpTarget = 0;
-  function offerJump(from, ch) {
-    jumpTarget = from;
-    $('#jumpTitle').textContent = `Jump to Chapter ${ch + 1}?`;
-    $('#jumpCopy').textContent =
-      `${CHAPTERS[ch] || 'This chapter'} starts at level ${from}, around ${C.rating(LEVELS[from - 1].s)}/10 difficulty. ` +
-      'Every level before it unlocks too, so you can go back for stars any time.';
-    openSheet('jumpSheet');
-  }
-  $('#jumpGo').addEventListener('click', () => { closeSheet('jumpSheet'); jumpTo(jumpTarget); });
 
   // ------------------------------------------------------------ tutorial --
 

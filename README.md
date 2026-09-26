@@ -17,7 +17,7 @@ Opening `index.html` straight from disk also works, but then generation and hint
 
 ## Features
 
-- **Campaign.** 200 levels in 10 chapters, each block of ten paced as warm-up, climb, breather, hard, breather, boss. Stars and progress are saved. Experienced players can skip the tutorial or jump ahead to any chapter from the level select.
+- **Campaign.** 200 levels in 10 chapters, each block of ten paced as warm-up, climb, breather, hard, breather, boss. Stars and progress are saved. Every level is open from the start; Play always picks up at your next unfinished level, and experienced players can skip the tutorial.
 - **Endless.** Puzzles generated on demand, with an Auto mode that adjusts difficulty to how you play, or six fixed tiers.
 - **Daily.** One seeded puzzle per day, with a streak.
 - **Assists.** Unlimited undo, restart, hints from the solver, and one extra tube per level. When a position can no longer be solved, the hint says so and offers to undo exactly back to the last solvable position.
