@@ -151,6 +151,13 @@
 
   let screen = 'home';
   function show(id) {
+    if (screen === 'game' && id !== 'game') {
+      // Leaving a puzzle: settle animations and keep it resumable.
+      board.finishAll();
+      if (G.puzzle && !G.won) saveSession();
+      $('#winSheet').hidden = true;
+      winShown = false;
+    }
     screen = id;
     for (const s of $$('.screen')) s.classList.toggle('active', s.id === id);
     if (id === 'game') { board.start(); requestAnimationFrame(fit); } else board.stop();
@@ -158,13 +165,64 @@
     if (id === 'levels') renderLevels();
   }
 
-  function openSheet(id) { $('#' + id).hidden = false; Sound.tap(); }
+  // ------------------------------------------------------------- history --
+  //
+  // Screens and sheets are history entries, so the browser's back button
+  // (and Android's back gesture) works like the in-app back buttons.
+  // Entries carry a depth so in-app back never leaves the page: at depth 0
+  // it swaps in the fallback screen instead.
+
+  const nav = {
+    state: () => history.state || { screen: 'home', depth: 0 },
+    /** Go to a screen. From an open sheet, the sheet's entry is replaced. */
+    go(id) {
+      const st = nav.state();
+      if (st.sheet) {
+        hideSheets();
+        history.replaceState({ screen: id, depth: st.depth }, '');
+      } else if (st.screen !== id) {
+        history.pushState({ screen: id, depth: st.depth + 1 }, '');
+      }
+      show(id);
+    },
+    /** Step back to wherever the player came from. */
+    back(fallback) {
+      const st = nav.state();
+      if (st.depth > 0) { history.back(); return; }
+      history.replaceState({ screen: fallback, depth: 0 }, '');
+      hideSheets();
+      show(fallback);
+    },
+  };
+
+  function hideSheets() { for (const o of $$('.overlay')) o.hidden = true; }
+
+  window.addEventListener('popstate', (e) => {
+    const st = e.state || { screen: 'home', depth: 0 };
+    let id = st.screen;
+    if (id === 'game' && !G.puzzle) id = 'home'; // stale entry from before a reload
+    for (const o of $$('.overlay')) o.hidden = o.id !== st.sheet;
+    if (id !== screen) show(id);
+  });
+
+  function openSheet(id) {
+    $('#' + id).hidden = false;
+    Sound.tap();
+    const st = nav.state();
+    history.pushState({ screen: st.screen, sheet: id, depth: st.depth + 1 }, '');
+  }
+  /** Close a sheet without touching history (it is being replaced or was never pushed). */
   function closeSheet(id) { $('#' + id).hidden = true; }
-  $$('[data-close]').forEach((b) => b.addEventListener('click', () => closeSheet(b.closest('.overlay').id)));
+  /** The player dismissed a sheet: same as pressing back. */
+  function dismissSheet(id) {
+    if (nav.state().sheet === id) history.back();
+    else closeSheet(id);
+  }
+  $$('[data-close]').forEach((b) => b.addEventListener('click', () => dismissSheet(b.closest('.overlay').id)));
   $$('.overlay').forEach((o) => o.addEventListener('pointerdown', (e) => {
-    if (e.target === o && o.id !== 'winSheet') closeSheet(o.id);
+    if (e.target === o && o.id !== 'winSheet') dismissSheet(o.id);
   }));
-  $$('[data-back]').forEach((b) => b.addEventListener('click', () => { Sound.tap(); show('home'); }));
+  $$('[data-back]').forEach((b) => b.addEventListener('click', () => { Sound.tap(); nav.back('home'); }));
 
   // ---------------------------------------------------------------- home --
 
@@ -196,7 +254,7 @@
     if (s && !s.won) resume(s);
     else startCampaign(Math.min(save.unlocked, LEVELS.length));
   });
-  $('#levelsBtn').addEventListener('click', () => { Sound.unlock(); Sound.tap(); show('levels'); });
+  $('#levelsBtn').addEventListener('click', () => { Sound.unlock(); Sound.tap(); nav.go('levels'); });
   $('#dailyBtn').addEventListener('click', () => { Sound.unlock(); Sound.tap(); startDaily(); });
   $('#endlessBtn').addEventListener('click', () => { Sound.unlock(); renderTiers(); openSheet('endlessSheet'); });
   $('#settingsBtn').addEventListener('click', () => { Sound.unlock(); openSheet('settingsSheet'); });
@@ -354,7 +412,7 @@
     Sound.unlock();
     const aim = endlessAim();
     showLoading(true);
-    show('game');
+    nav.go('game');
     try {
       const p = await prefetch.take(aim.target);
       showLoading(false);
@@ -373,7 +431,7 @@
     const seed = C.hashString('daily-' + day);
     const spec = C.specForTarget(C.TIERS[3].target, C.mulberry32(seed), 'daily');
     showLoading(true);
-    show('game');
+    nav.go('game');
     try {
       const p = await work('generate', { spec, seed, candidates: 18 });
       showLoading(false);
@@ -392,7 +450,7 @@
     const p = decodeLevel(n);
     if (!p) return;
     begin('campaign', n, { ...p, title: `Level ${n}` });
-    show('game');
+    nav.go('game');
   }
 
   // ---------------------------------------------------------- game setup --
@@ -430,7 +488,7 @@
 
   function resume(s) {
     const puzzle = s.puzzle;
-    show('game');
+    nav.go('game');
     begin(s.mode, s.level, puzzle, s);
     if (s.mode === 'endless') prefetch.warm(endlessAim().target);
   }
@@ -757,9 +815,7 @@
   });
   $('#gameBack').addEventListener('click', () => {
     Sound.tap();
-    board.finishAll();
-    if (!G.won) saveSession();
-    show(G.mode === 'campaign' ? 'levels' : 'home');
+    nav.back(G.mode === 'campaign' ? 'levels' : 'home');
   });
 
   document.addEventListener('keydown', (e) => {
@@ -859,9 +915,7 @@
   });
   $('#winMenu').addEventListener('click', () => {
     Sound.tap();
-    winShown = false;
-    closeSheet('winSheet');
-    show(G.mode === 'campaign' ? 'levels' : 'home');
+    nav.back(G.mode === 'campaign' ? 'levels' : 'home');
   });
 
   // ------------------------------------------------------------- settings --
@@ -918,6 +972,7 @@
   });
 
   applySettings();
+  history.replaceState({ screen: 'home', depth: 0 }, '');
   show('home');
   // Test handle for local development only.
   if (/^(localhost|127\.0\.0\.1)$/.test(location.hostname)) window.PourDebug = { G, board, tap, begin: (...a) => begin(...a), startCampaign, startEndless, startDaily, save: () => save };
