@@ -18,16 +18,15 @@
     'Centrifuge', 'Catalyst', 'Chromatography', 'Crystal Garden', 'Grand Assay',
   ];
   const PER_CHAPTER = 20;
-  const FIRST_REGULAR = 6; // levels 1–5 are onboarding
 
   // ------------------------------------------------------------- storage --
 
   const KEY = 'pour-decisions-v1';
   const reducedDefault = window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches;
   const defaults = () => ({
-    unlocked: 1,
-    stars: {},
-    best: {},
+    v: window.SortSave.SCHEMA,
+    progress: {}, // puzzle content id → { stars, best }
+    tutorialDone: false,
     settings: { sound: false, haptics: true, symbols: false, fast: false, reduced: reducedDefault },
     endless: { auto: 1.2, choice: 'auto', solved: 0, streak: 0 },
     daily: { done: {}, streak: 0, last: '' },
@@ -37,7 +36,7 @@
   try {
     const raw = localStorage.getItem(KEY);
     if (raw) {
-      const d = JSON.parse(raw);
+      const d = window.SortSave.migrate(JSON.parse(raw), C);
       save = Object.assign(defaults(), d);
       save.settings = Object.assign(defaults().settings, d.settings);
       save.endless = Object.assign(defaults().endless, d.endless);
@@ -128,10 +127,22 @@
     return { ...puzzle, tubes: puzzle.tubes.map((t) => t.map((c) => map.get(c))) };
   }
 
+  // Progress is keyed by puzzle content, so levels can be reordered or replaced safely.
+  const levelById = new Map(LEVELS.map((L, i) => [L.id, i + 1]));
+  const progressOf = (n) => (LEVELS[n - 1] && save.progress[LEVELS[n - 1].id]) || {};
+  const starsOf = (n) => progressOf(n).stars || 0;
+  /** The level after the furthest one solved. */
+  function nextUp() {
+    let furthest = 0;
+    for (let n = 1; n <= LEVELS.length; n++) if (starsOf(n)) furthest = n;
+    return Math.min(furthest + 1, LEVELS.length);
+  }
+
   function decodeLevel(n) {
     const L = LEVELS[n - 1];
     if (!L) return null;
     return recolor({
+      id: L.id,
       cap: L.c,
       tubes: L.t.split(',').map((s) => Array.from(s, (ch) => ch.charCodeAt(0) - 97)),
       par: L.p,
@@ -226,21 +237,34 @@
 
   // ---------------------------------------------------------------- home --
 
-  function totalStars() { return Object.values(save.stars).reduce((a, b) => a + b, 0); }
+  function totalStars() { let t = 0; for (let n = 1; n <= LEVELS.length; n++) t += starsOf(n); return t; }
+
+  /** The saved unfinished puzzle, if it still exists. A campaign puzzle is found by id, wherever it now sits. */
+  function liveSession() {
+    const s = save.session;
+    if (!s || s.won) return null;
+    if (s.mode === 'campaign') {
+      const n = s.puzzle && levelById.get(s.puzzle.id);
+      if (!n) return null;
+      s.level = n;
+      s.puzzle.title = `Level ${n}`;
+    }
+    return s;
+  }
+  const needsTutorial = () => !save.tutorialDone && !Object.keys(save.progress).length;
   const today = () => {
     const d = new Date();
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
   };
 
   function refreshHome() {
-    const s = save.session;
-    const next = Math.min(save.unlocked, LEVELS.length);
-    if (s && !s.won) {
+    const s = liveSession();
+    if (s) {
       $('#playLabel').textContent = 'Continue';
-      $('#playSub').textContent = s.mode === 'campaign' ? `Level ${s.level}` : s.mode === 'daily' ? 'Daily puzzle' : 'Endless';
+      $('#playSub').textContent = { campaign: `Level ${s.level}`, daily: 'Daily puzzle', tutorial: 'Tutorial' }[s.mode] || 'Endless';
     } else {
       $('#playLabel').textContent = 'Play';
-      $('#playSub').textContent = `Level ${next}`;
+      $('#playSub').textContent = needsTutorial() ? 'Quick tutorial' : `Level ${nextUp()}`;
     }
     $('#starsTotal').textContent = `${totalStars()} ★`;
     $('#endlessSub').textContent = save.endless.choice === 'auto' ? `Auto · ${C.TIERS[autoTier()].name}` : C.TIERS[+save.endless.choice].name;
@@ -250,9 +274,10 @@
 
   $('#playBtn').addEventListener('click', () => {
     Sound.unlock(); Sound.tap();
-    const s = save.session;
-    if (s && !s.won) resume(s);
-    else startCampaign(Math.min(save.unlocked, LEVELS.length));
+    const s = liveSession();
+    if (s) resume(s);
+    else if (needsTutorial()) startTutorial(0);
+    else startCampaign(nextUp());
   });
   $('#levelsBtn').addEventListener('click', () => { Sound.unlock(); Sound.tap(); nav.go('levels'); });
   $('#dailyBtn').addEventListener('click', () => { Sound.unlock(); Sound.tap(); startDaily(); });
@@ -313,12 +338,12 @@
   function renderLevels() {
     const wrap = $('#levelsScroll');
     const frag = document.createDocumentFragment();
-    const current = Math.min(save.unlocked, LEVELS.length);
+    const current = nextUp();
     const chapters = Math.ceil(LEVELS.length / PER_CHAPTER);
     for (let ch = 0; ch < chapters; ch++) {
       const from = ch * PER_CHAPTER + 1, to = Math.min(LEVELS.length, from + PER_CHAPTER - 1);
       let got = 0;
-      for (let n = from; n <= to; n++) got += save.stars[n] || 0;
+      for (let n = from; n <= to; n++) got += starsOf(n);
       const sec = document.createElement('section');
       sec.className = 'chapter';
       sec.innerHTML = `
@@ -334,7 +359,7 @@
         const btn = document.createElement('button');
         btn.className = 'level';
         // Every level is open; ones past your progress are just quieter.
-        const stars = save.stars[n] || 0;
+        const stars = starsOf(n);
         if (n === current && !stars) btn.classList.add('current');
         else if (n > current && !stars) btn.classList.add('ahead');
         btn.innerHTML = `<span>${n}</span><span class="mini-stars">${[1, 2, 3].map((k) => `<svg class="${k <= stars ? 'on' : ''}"><use href="#i-star"/></svg>`).join('')}</span>`;
@@ -568,29 +593,45 @@
     const c = $('#caption');
     c.hidden = !text;
     $('#captionText').textContent = text || '';
-    $('#skipTutorial').hidden = !(G.mode === 'campaign' && G.puzzle && G.puzzle.kind === 'tutorial');
+    $('#skipTutorial').hidden = G.mode !== 'tutorial';
   }
 
-  /** Move "next up" to level n and start it. */
-  function jumpTo(n) {
-    save.unlocked = Math.max(save.unlocked, n);
-    if (save.session && save.session.mode === 'campaign' && save.session.level < n) save.session = null;
+  function finishTutorial() {
+    save.tutorialDone = true;
     persist();
-    startCampaign(n);
   }
-  $('#skipTutorial').addEventListener('click', () => { Sound.tap(); jumpTo(FIRST_REGULAR); });
-
+  $('#helpTutorial').addEventListener('click', () => { closeSheet('helpSheet'); startTutorial(0); });
+  $('#skipTutorial').addEventListener('click', () => { Sound.tap(); finishTutorial(); startCampaign(nextUp()); });
 
   // ------------------------------------------------------------ tutorial --
 
+  /**
+   * A short guided tutorial, separate from the campaign. Each step teaches
+   * one idea; the first two point at every move, the last lets go.
+   */
+  const TUTORIAL = [
+    { tubes: [[0, 0, 1, 1], [1, 1, 0, 0], []], guided: true },
+    { tubes: [[0, 1, 1], [1, 0, 0], [0, 1], []], guided: true,
+      text: 'Liquid only pours onto the same color, or into an empty tube.' },
+    { tubes: [[0, 1, 2, 0], [2, 0, 1, 1], [1, 2, 0, 2], [], []], guided: false,
+      text: 'Your turn: make every tube one color. Empty tubes are scratch space.' },
+  ];
+
+  function startTutorial(step) {
+    const T = TUTORIAL[step];
+    const par = C.solve(T.tubes, 4).moves.length;
+    const puzzle = recolor({ cap: 4, tubes: T.tubes, par, score: 2.5, kind: 'tutorial', title: `Tutorial ${step + 1} of ${TUTORIAL.length}` }, 101 + step);
+    begin('tutorial', step, puzzle);
+    nav.go('game');
+  }
+
   function tutorial() {
     caption(null);
-    if (G.mode !== 'campaign' || G.level > 2 || G.won) return;
-    if (G.level === 1) {
-      caption(G.selected < 0 ? 'Tap a tube to pick it up.' : 'Now tap the tube with the arrow to pour.');
-    } else {
-      caption('Liquid only lands on the same color or in an empty tube. Fill every tube with one color.');
-    }
+    if (G.mode !== 'tutorial' || G.won) return;
+    const T = TUTORIAL[G.level];
+    if (G.level === 0) caption(G.selected < 0 ? 'Tap a tube to pick it up.' : 'Now tap the tube with the arrow to pour.');
+    else caption(T.text);
+    if (!T.guided) return;
     const r = C.solve(G.tubes, G.puzzle.cap, { weight: 1, limit: 20000 });
     if (r.solved && r.moves.length) board.setHint(r.moves[0]);
   }
@@ -651,14 +692,14 @@
     board.select(i);
     Sound.select(G.tubes[i].length / G.puzzle.cap);
     Haptics.buzz(6);
-    if (G.mode === 'campaign' && G.level === 1) tutorial();
+    if (G.mode === 'tutorial' && G.level === 0) tutorial();
   }
   function deselect() {
     if (G.selected < 0) return;
     G.selected = -1;
     board.select(-1);
     Sound.deselect();
-    if (G.mode === 'campaign' && G.level === 1) tutorial();
+    if (G.mode === 'tutorial' && G.level === 0) tutorial();
   }
 
   function doPour(a, b) {
@@ -694,7 +735,14 @@
       Sound.complete(done - 1);
       Haptics.buzz([14, 50, 14]);
     } else if (type === 'idle') {
-      if (G.won && $('#winSheet').hidden && !winShown) { winShown = true; setTimeout(win, 420); }
+      if (G.won && $('#winSheet').hidden && !winShown) {
+        winShown = true;
+        if (G.mode === 'tutorial' && G.level < TUTORIAL.length - 1) {
+          caption('Nice!');
+          const step = G.level + 1, token = G.token;
+          setTimeout(() => { if (G.token === token && screen === 'game') startTutorial(step); }, 900);
+        } else setTimeout(win, 420);
+      }
       else if (G.stuck && !G.won) {
         toast(G.extra ? 'No moves left. Undo or restart.' : 'No moves left. Undo, or add a tube.', G.history.length ? { label: 'Undo', run: undo } : null, 0);
       }
@@ -824,7 +872,7 @@
   function win() {
     const best = G.puzzle.par;
     const assists = (G.hints > 0 ? 1 : 0) + (G.usedExtra ? 1 : 0);
-    const stars = starsFor(G.moves, best, G.mode === 'campaign' && G.level <= 2 ? 0 : assists);
+    const stars = G.mode === 'tutorial' ? 3 : starsFor(G.moves, best, assists);
     board.confetti();
     Sound.win();
     Haptics.buzz([20, 60, 20, 60, 40]);
@@ -833,13 +881,19 @@
     if (G.moves <= best) note = `Perfect. ${best} is the fewest moves possible.`;
     else if (stars === 3) note = `Under par. The best possible is ${best}.`;
     else note = `Par is ${parFor(best)}. The best possible is ${best}.`;
-    if (assists && !(G.mode === 'campaign' && G.level <= 2)) note += G.hints && G.usedExtra ? ' Hint and extra tube used.' : G.hints ? ' Hint used.' : ' Extra tube used.';
+    if (assists && G.mode !== 'tutorial') note += G.hints && G.usedExtra ? ' Hint and extra tube used.' : G.hints ? ' Hint used.' : ' Extra tube used.';
 
-    if (G.mode === 'campaign') {
+    if (G.mode === 'tutorial') {
+      finishTutorial();
+      eyebrow = 'Tutorial complete';
+      title = 'You’re ready!';
+      note = 'Levels ramp up quickly. Undo is free, and hints are there when you need one.';
+      next = `Start level ${nextUp()}`;
+    } else if (G.mode === 'campaign') {
       const n = G.level;
-      save.stars[n] = Math.max(save.stars[n] || 0, stars);
-      save.best[n] = Math.min(save.best[n] || Infinity, G.moves);
-      save.unlocked = Math.max(save.unlocked, Math.min(LEVELS.length, n + 1));
+      const rec = save.progress[G.puzzle.id] || (save.progress[G.puzzle.id] = {});
+      rec.stars = Math.max(rec.stars || 0, stars);
+      rec.best = Math.min(rec.best || Infinity, G.moves);
       if (G.puzzle.kind === 'boss') title = 'Boss cleared!';
       if (n >= LEVELS.length) { next = 'Try Endless'; }
       if (n % PER_CHAPTER === 0 && n < LEVELS.length) eyebrow = `Chapter ${n / PER_CHAPTER} complete`;
@@ -886,7 +940,8 @@
     Sound.tap();
     winShown = false;
     closeSheet('winSheet');
-    if (G.mode === 'campaign' && G.level < LEVELS.length) startCampaign(G.level + 1);
+    if (G.mode === 'tutorial') startCampaign(nextUp());
+    else if (G.mode === 'campaign' && G.level < LEVELS.length) startCampaign(G.level + 1);
     else startEndless();
   });
   $('#winReplay').addEventListener('click', () => {

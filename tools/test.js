@@ -92,6 +92,33 @@ test(`all ${LEVELS.length} levels are well-formed and solvable in par`, () => {
   });
 });
 
+test('level ids are unique and match their content', () => {
+  const seen = new Set();
+  LEVELS.forEach((L, i) => {
+    assert.ok(L.id, `level ${i + 1}: missing id`);
+    assert.strictEqual(L.id, C.puzzleId(decode(L), L.c), `level ${i + 1}: id does not match content`);
+    assert.ok(!seen.has(L.id), `level ${i + 1}: duplicate id`);
+    seen.add(L.id);
+  });
+});
+
+test('puzzle id ignores tube order and color labels', () => {
+  const a = [[0, 1, 1, 0], [1, 0, 0, 1], []];
+  const b = [[], [5, 3, 3, 5], [3, 5, 5, 3]];
+  assert.strictEqual(C.puzzleId(a, 4), C.puzzleId(b, 4));
+  assert.notStrictEqual(C.puzzleId(a, 4), C.puzzleId([[0, 1, 1, 1], [1, 0, 0, 0], []], 4));
+});
+
+test('v1 saves migrate to content-keyed progress', () => {
+  global.self = global;
+  require('../js/migrations.js');
+  const d = global.SortSave.migrate({ unlocked: 3, stars: { 1: 3, 2: 1 }, best: { 1: 9 }, settings: {} }, C);
+  assert.strictEqual(d.v, global.SortSave.SCHEMA);
+  assert.strictEqual(Object.keys(d.progress).length, 2);
+  assert.deepStrictEqual(Object.values(d.progress)[0], { stars: 3, best: 9 });
+  assert.ok(d.tutorialDone && !d.stars && !d.unlocked);
+});
+
 test('campaign difficulty rises chapter over chapter', () => {
   const means = [];
   for (let ch = 0; ch < LEVELS.length / 20; ch++) {

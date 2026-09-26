@@ -169,7 +169,10 @@
       </ol>
       <p class="sheet-copy"><b>Par</b> is the move count for three stars. Hints and the extra tube each cost a star, undo is free.</p>
       <p class="sheet-copy keys">Keyboard: <kbd>1</kbd>–<kbd>9</kbd> pick tubes, <kbd>Z</kbd> undo, <kbd>R</kbd> restart, <kbd>H</kbd> hint.</p>
-      <button class="btn primary wide" data-close>Got it</button>
+      <div class="sheet-actions">
+        <button class="btn ghost" id="helpTutorial">Tutorial</button>
+        <button class="btn primary" data-close>Got it</button>
+      </div>
     </div>
   </div>
 
@@ -177,6 +180,7 @@
 
 <script src="js/core.js"></script>
 <script src="js/levels.js"></script>
+<script src="js/migrations.js"></script>
 <script src="js/audio.js"></script>
 <script src="js/board.js"></script>
 <script src="js/game.js"></script>

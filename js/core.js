@@ -138,6 +138,21 @@
     return parts.join('|');
   }
 
+  /**
+   * A stable identity for a puzzle's content, used to key saved progress.
+   * Colors are relabeled by first appearance and tubes are sorted, so the
+   * same deal gets the same id whatever its position, palette or tube order.
+   */
+  function puzzleId(tubes, cap) {
+    const map = new Map();
+    const relabeled = tubes.map((t) => t.map((c) => {
+      if (!map.has(c)) map.set(c, map.size);
+      return map.get(c);
+    }));
+    const key = cap + ':' + stateKey(relabeled);
+    return hashString(key).toString(36) + hashString('~' + key).toString(36);
+  }
+
   function countRuns(tubes) {
     let runs = 0;
     for (const t of tubes) for (let i = 0; i < t.length; i++) if (i === 0 || t[i] !== t[i - 1]) runs++;
@@ -486,11 +501,13 @@
   /**
    * The campaign curve: a target score per level.
    *
-   *   target(L) = 2.9 + 6.4 · (L/200)^0.75   (a steady ramp that eases off)
-   *             + beat offset                 (the rhythm within each ten)
+   *   target(L) = 3.2 + 6.1 · ((L−1)/199)^0.42   (climbs fast, then eases off)
+   *             + beat offset                     (the rhythm within each ten)
    *
+   * The tutorial is separate, so level 1 is a real (gentle) puzzle and the
+   * climb is quick: level 20 sits around 5.5, about 9 colors and 11 tubes.
    * Every block of ten follows the same beat: warm up, climb, a breather,
-   * climb, a hard one, a breather, then a boss. Swings start small and grow.
+   * climb, a hard one, a breather, then a boss. Swings reach full size by 20.
    */
   const BEAT = [
     { d: -0.15, kind: 'normal' },
@@ -508,30 +525,19 @@
 
   function campaignTarget(level) {
     const beat = BEAT[(level - 1) % 10];
-    const ramp = 2.9 + 6.4 * Math.pow(Math.min(level, TOTAL_LEVELS) / TOTAL_LEVELS, 0.75);
-    const swing = 0.5 + 0.5 * Math.min(1, level / 60);
+    const x = (Math.min(level, TOTAL_LEVELS) - 1) / (TOTAL_LEVELS - 1);
+    const ramp = 3.2 + 6.1 * Math.pow(x, 0.42);
+    const swing = 0.4 + 0.6 * Math.min(1, level / 20);
     return ramp + beat.d * swing;
   }
 
   function campaignSpec(level) {
-    // Hand-tuned onboarding: tiny puzzles that teach one idea each.
-    const intro = {
-      1: { colors: 2, cap: 4, empties: 1, p: 0.5, kind: 'tutorial' },
-      2: { colors: 3, cap: 4, empties: 2, p: 0.3, kind: 'tutorial' },
-      3: { colors: 3, cap: 4, empties: 1, p: 0.3, kind: 'normal' },
-      4: { colors: 4, cap: 4, empties: 2, p: 0.3, kind: 'normal' },
-      5: { colors: 4, cap: 4, empties: 2, p: 0.6, kind: 'normal' },
-    };
-    if (intro[level]) {
-      const s = intro[level];
-      return { colors: s.colors, cap: s.cap, empties: s.empties, percentile: s.p, kind: s.kind };
-    }
     const beat = BEAT[(level - 1) % 10];
     const target = campaignTarget(level);
-    // Every other boss after 50 swaps width for height: fewer, taller tubes.
-    const cap = level > 50 && beat.kind === 'boss' && (level / 10) % 2 === 1 ? 5 : 4;
-    // The board should grow over the campaign even when a target could be met small.
-    const minColors = Math.max(4, Math.min(10, 4 + Math.floor(level / 22)) - (beat.kind === 'breather' ? 1 : 0));
+    // Every other boss from level 30 swaps width for height: fewer, taller tubes.
+    const cap = level >= 30 && beat.kind === 'boss' && (level / 10) % 2 === 1 ? 5 : 4;
+    // The board grows quickly: 6+ colors (8+ tubes) are routine by level 12.
+    const minColors = Math.max(3, Math.min(10, 3 + Math.floor((level + 2) / 5)) - (beat.kind === 'breather' ? 1 : 0));
     const colors = sizeForTarget(target, cap, cap === 5 ? Math.max(5, minColors - 2) : minColors, 14);
     return { colors, cap, empties: 2, target: +target.toFixed(2), kind: beat.kind };
   }
@@ -597,7 +603,7 @@
     tasks,
     mulberry32, hashString, shuffle,
     clone, top, topRun, isMono, isComplete, canPour, pourAmount, pour, isSolved,
-    allMoves, usefulMoves, stateKey, countRuns, colorCount,
+    allMoves, usefulMoves, stateKey, puzzleId, countRuns, colorCount,
     solve, bestSolution, rollout, analyze,
     randomPuzzle, generate, campaignSpec, campaignTarget, tierSpec, specForTarget, sizeForTarget, autoTarget,
     TIERS, SIZE_TABLE, TOTAL_LEVELS, rating,

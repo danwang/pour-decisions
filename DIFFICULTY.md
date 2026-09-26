@@ -58,37 +58,39 @@ Everything is seeded, so the same seed always gives the same puzzle.
 ## The campaign curve
 
 ```
-target(L) = 2.9 + 6.4 · (L / 200)^0.75  +  beat offset
+target(L) = 3.2 + 6.1 · ((L − 1) / 199)^0.42  +  beat offset
 ```
 
-- **The ramp** rises quickly early, when every new idea is fresh, and eases off later, when each step costs more to design and to play.
+- **The tutorial is separate.** Three guided mini-puzzles teach the rules before the campaign, so level 1 is already a real (gentle) puzzle and the campaign can climb fast.
+- **The ramp** is steep early and flattens later. Level 20 sits around 5.5–6.7: the difficulty level 60 had before, with about 9 colors and 11 tubes. The late game ends where it did.
 - **The beat** gives each block of ten a rhythm, so difficulty rises and falls instead of being a flat staircase:
 
   | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 |
   |---|---|---|---|---|---|---|---|---|---|
   | −0.15 | 0 | +0.2 | **−0.9 breather** | +0.1 | +0.3 | **+0.7 hard** | **−0.8 breather** | +0.3 | **+1.2 boss** |
 
-  The swings start at half size and grow to full by level 60, so early players don't hit a wall.
-- **The board grows** with a minimum color count (4 plus 1 every 22 levels), so later levels look bigger even when a small board could hit the target.
-- **Every other boss after level 50** uses 5-slot tubes for variety.
-- **Levels 1–5** are hand-shaped: 2, 3, 3, 4 and 4 colors, with a guided first level.
+  The swings start at 40% size and reach full size by level 20.
+- **The board grows fast.** A minimum color count (3, plus 1 every 5 levels, up to 10) keeps boards getting bigger even when a small one could hit the target. From level 5 on, 6+ colors (8+ tubes) are the norm.
+- **Every other boss from level 30** uses 5-slot tubes for variety.
 
-Result from `node tools/build-levels.js` (about 45 seconds on 12 threads):
+Result from `node tools/build-levels.js` (about 70 seconds on 12 threads):
 
-| Chapter | Levels | Mean score | Range |
-|---|---|---:|---|
-| 1 First Drops | 1–20 | 3.72 | 2.91–4.85 |
-| 2 Rinse Cycle | 21–40 | 4.53 | 3.53–5.91 |
-| 3 Bench Work | 41–60 | 5.27 | 4.19–6.68 |
-| 4 Titration | 61–80 | 5.92 | 4.72–7.34 |
-| 5 Distillation | 81–100 | 6.50 | 5.31–7.66 |
-| 6 Centrifuge | 101–120 | 7.06 | 5.82–8.36 |
-| 7 Catalyst | 121–140 | 7.67 | 6.44–9.02 |
-| 8 Chromatography | 141–160 | 8.17 | 6.96–9.46 |
-| 9 Crystal Garden | 161–180 | 8.68 | 7.37–10.02 |
-| 10 Grand Assay | 181–200 | 9.10 | 7.93–10.41 |
+| Chapter | Levels | Mean score | Range | Colors |
+|---|---|---:|---|---|
+| 1 First Drops | 1–20 | 4.85 | 3.11–6.57 | 3–9 |
+| 2 Rinse Cycle | 21–40 | 6.01 | 4.75–7.31 | 7–11 |
+| 3 Bench Work | 41–60 | 6.69 | 5.46–8.04 | 9–12 |
+| 4 Titration | 61–80 | 7.21 | 6.09–8.44 | 9–12 |
+| 5 Distillation | 81–100 | 7.65 | 6.31–9.06 | 9–12 |
+| 6 Centrifuge | 101–120 | 8.05 | 6.95–9.32 | 10–13 |
+| 7 Catalyst | 121–140 | 8.40 | 7.25–9.69 | 11–14 |
+| 8 Chromatography | 141–160 | 8.64 | 7.44–9.99 | 11–14 |
+| 9 Crystal Garden | 161–180 | 8.96 | 7.87–10.11 | 11–14 |
+| 10 Grand Assay | 181–200 | 9.29 | 8.07–10.54 | 12–14 |
 
-The median gap between a level's target and its actual score is 0.03 (90th percentile 0.13). `tools/test.js` checks that every chapter is harder on average than the one before.
+The median gap between a level's target and its actual score is 0.04 (90th percentile 0.17). `tools/test.js` checks that every chapter is harder on average than the one before.
+
+Changing the curve regenerates every level, so saved progress is keyed by puzzle content, not level number (see "Saved progress" in the README).
 
 ## Endless and Daily
 
@@ -113,13 +115,14 @@ The median gap between a level's target and its actual score is 0.03 (90th perce
 
 | To change… | Edit |
 |---|---|
-| Overall ramp or length | `campaignTarget` (constants 2.9, 6.4, 0.75) and `TOTAL_LEVELS` |
+| Overall ramp or length | `campaignTarget` (constants 3.2, 6.1, 0.42) and `TOTAL_LEVELS` |
 | Rhythm within a block | `BEAT` |
+| How fast boards grow | `minColors` in `campaignSpec` |
 | How the player model plays | `moveAppeal`, and the temperature in `explore` |
 | Size choice | `sizeForTarget`, and `SIZE_TABLE` (rerun `tools/calibrate.js`) |
 | Endless adaptation | the dial steps in `win()` in `js/game.js`, and `autoTarget` |
 
-Then run `node tools/build-levels.js && node tools/test.js`.
+Then run `node tools/build-levels.js && node tools/test.js`. Bump the seed prefix in `tools/build-levels.js` (`campaign-v3-`) when you want fresh deals at the same targets.
 
 ## Next step: real player data
 
