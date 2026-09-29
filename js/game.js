@@ -27,7 +27,7 @@
     v: window.SortSave.SCHEMA,
     progress: {}, // puzzle content id → { stars, best }
     tutorialDone: false,
-    settings: { sound: false, haptics: true, symbols: false, fast: false, reduced: reducedDefault },
+    settings: { sound: false, haptics: true, symbols: false, fast: false, reduced: reducedDefault, ads: true },
     endless: { auto: 1.2, choice: 'auto', solved: 0, streak: 0 },
     daily: { done: {}, streak: 0, last: '' },
     session: null,
@@ -864,6 +864,17 @@
 
   // ------------------------------------------------------------------ win --
 
+  // Parody interstitials (js/fakeads.js). Shown once per solved puzzle, never in the tutorial.
+  const ads = window.FakeAds ? window.FakeAds.create({ countdown: 5 }) : null;
+  function afterAd(then) {
+    if (!ads || !save.settings.ads || G.mode === 'tutorial') { then(); return; }
+    // Let the confetti land before the ad barges in, like the real thing.
+    setTimeout(() => {
+      if (screen !== 'game' || !G.won) { then(); return; }
+      ads.show({ reducedMotion: !!save.settings.reduced }).then(then);
+    }, 1100);
+  }
+
   function fmtTime(ms) {
     const s = Math.round(ms / 1000);
     return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
@@ -933,7 +944,7 @@
     $('#winTime').textContent = fmtTime(G.elapsed);
     $('#winNext').textContent = next;
     $$('#winStars .s').forEach((s, i) => { s.classList.remove('on'); void s.getBoundingClientRect(); s.classList.toggle('on', i < stars); });
-    $('#winSheet').hidden = false;
+    afterAd(() => { if (screen === 'game' && G.won) $('#winSheet').hidden = false; });
   }
 
   $('#winNext').addEventListener('click', () => {
@@ -967,7 +978,7 @@
     board.opts.speed = s.fast ? 1.6 : 1;
     demo.board.opts.symbols = s.symbols;
   }
-  const settingMap = { setSound: 'sound', setHaptics: 'haptics', setSymbols: 'symbols', setFast: 'fast', setReduced: 'reduced' };
+  const settingMap = { setSound: 'sound', setHaptics: 'haptics', setSymbols: 'symbols', setFast: 'fast', setReduced: 'reduced', setAds: 'ads' };
   for (const [id, key] of Object.entries(settingMap)) {
     const el = $('#' + id);
     el.checked = !!save.settings[key];
@@ -1008,9 +1019,30 @@
     else if (screen === 'home') demo.start();
   });
 
+  // Which build is this? Stamped at deploy time by tools/stamp-version.js.
+  (function showBuild() {
+    const v = window.PourVersion || { sha: 'dev' };
+    const sha = String(v.sha || 'dev');
+    const short = /^[0-9a-f]{7,40}$/.test(sha) ? sha.slice(0, 7) : sha;
+    const when = v.builtAt ? ' · ' + new Date(v.builtAt).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '';
+    const label = `build ${short}${v.local ? '+local' : ''}${when}`;
+    const box = $('#buildInfo');
+    box.textContent = '';
+    if (short !== sha.slice(0, 7) || v.local) box.textContent = label;
+    else {
+      const a = document.createElement('a');
+      a.href = `https://github.com/danwang/pour-decisions/commit/${sha}`;
+      a.target = '_blank';
+      a.rel = 'noopener';
+      a.textContent = label;
+      box.appendChild(a);
+    }
+    box.title = sha;
+  })();
+
   applySettings();
   history.replaceState({ screen: 'home', depth: 0 }, '');
   show('home');
   // Test handle for local development only.
-  if (/^(localhost|127\.0\.0\.1)$/.test(location.hostname)) window.PourDebug = { G, board, tap, begin: (...a) => begin(...a), startCampaign, startEndless, startDaily, save: () => save };
+  if (/^(localhost|127\.0\.0\.1)$/.test(location.hostname)) window.PourDebug = { G, board, tap, begin: (...a) => begin(...a), startCampaign, startEndless, startDaily, ads, save: () => save };
 })();

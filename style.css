@@ -156,6 +156,8 @@ svg { width: 24px; height: 24px; flex: none; }
 .mode svg { color: var(--gold); width: 26px; height: 26px; }
 .mode span { font: 700 16px/1.1 var(--display); }
 .mode small { font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.build { margin: -6px 0 0; font: 700 11px/1.4 var(--body); color: var(--faint); font-variant-numeric: tabular-nums; -webkit-user-select: text; user-select: text; }
+.build a { color: inherit; text-underline-offset: 2px; }
 
 /* ------------------------------------------------------------------ bars */
 

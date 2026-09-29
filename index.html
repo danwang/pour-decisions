@@ -50,6 +50,7 @@
         <button class="mode" id="endlessBtn"><svg><use href="#i-infinity"/></svg><span>Endless</span><small id="endlessSub">Auto</small></button>
         <button class="mode" id="dailyBtn"><svg><use href="#i-sun"/></svg><span>Daily</span><small id="dailySub">New</small></button>
       </div>
+      <p class="build" id="buildInfo"></p>
     </div>
   </section>
 
@@ -150,6 +151,7 @@
         <label class="toggle"><span><b>Color symbols</b><small>A shape on every color, for color-blind play</small></span><input type="checkbox" id="setSymbols"><i></i></label>
         <label class="toggle"><span><b>Quick pours</b><small>Faster animations</small></span><input type="checkbox" id="setFast"><i></i></label>
         <label class="toggle"><span><b>Reduce motion</b><small>Pour in place, no flying tubes</small></span><input type="checkbox" id="setReduced"><i></i></label>
+        <label class="toggle"><span><b>Ads</b><small>Parody ads after each puzzle. None of them are real.</small></span><input type="checkbox" id="setAds"><i></i></label>
       </div>
       <button class="btn danger wide" id="resetBtn">Reset progress</button>
     </div>
@@ -178,9 +180,12 @@
 
 </div>
 
+<script src="js/version.js"></script>
 <script src="js/core.js"></script>
 <script src="js/levels.js"></script>
 <script src="js/migrations.js"></script>
+<script src="js/fakeads.js"></script>
+<script src="js/fakeads-creatives.js"></script>
 <script src="js/audio.js"></script>
 <script src="js/board.js"></script>
 <script src="js/game.js"></script>

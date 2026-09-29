@@ -45,6 +45,9 @@ js/levels.js      the generated campaign (each level carries a content id)
 js/migrations.js  saved-data schema version and upgrade steps
 js/board.js       canvas renderer and animation system
 js/audio.js       synthesized sound and haptics
+js/fakeads.js     parody interstitial ad engine (standalone, reusable)
+js/fakeads-creatives.js  the parody ads themselves
+ads.html          test bench: cycle through every ad
 js/game.js        controller: modes, input, hints, saving, menus
 js/worker.js      background generation and hint search
 tools/
@@ -52,7 +55,26 @@ tools/
   build-levels.js regenerate js/levels.js (parallel)
   test.js         rules, solver optimality, dead-end proof, every level solvable
   serve.js        no-cache local server
+  stamp-version.js write js/version.js at deploy time
 ```
+
+## Parody ads
+
+After each solved puzzle (not the tutorial), a fake full-screen ad plays with a 5-second countdown before its X appears. Every brand is made up and nothing is fetched or tracked. Turn them off in Settings → Ads.
+
+`js/fakeads.js` has no dependencies and injects its own CSS, so it can be dropped into another page:
+
+```js
+const ads = FakeAds.create({ countdown: 5 });
+await ads.show();                       // resolves when closed
+FakeAds.register({ id, brand, tagline, render(stage, api) { … } });
+```
+
+Open `/ads.html` to cycle through every ad with a picker, arrow keys and a countdown selector.
+
+## Build stamp
+
+The home screen shows which commit is running, for example "build 6f74d50 · Sep 28, 14:02", linked to the commit on GitHub. The deploy build runs `tools/stamp-version.js`, which writes `js/version.js` from Render's `RENDER_GIT_COMMIT` (or `git rev-parse HEAD`). The committed `js/version.js` is a placeholder that shows "dev". `tools/serve.js` answers with the live local commit, marked "+local" when there are uncommitted changes.
 
 ## Saved progress
 

@@ -2,7 +2,7 @@ services:
   - type: web
     name: pour-decisions
     runtime: static
-    buildCommand: node tools/test.js
+    buildCommand: node tools/stamp-version.js && node tools/test.js
     staticPublishPath: .
     headers:
       - path: /*
