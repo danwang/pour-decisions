@@ -577,9 +577,6 @@
     $('#calSolved').textContent = all.length;
     $('#calStars').textContent = all.reduce((a, s) => a + s, 0);
     $('#calToday').textContent = D.done[t] ? 'Replay today’s puzzle' : 'Play today’s puzzle';
-    const next = new Date(); next.setUTCHours(24, 0, 0, 0); // the next turnover, so daylight saving is right
-    const reset = next.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
-    $('#calReset').textContent = `New puzzle every day at ${reset} your time.`;
   }
   $('#calPrev').addEventListener('click', () => { Sound.tap(); calMonth.setMonth(calMonth.getMonth() - 1); renderCalendar(); });
   $('#calNext').addEventListener('click', () => { Sound.tap(); calMonth.setMonth(calMonth.getMonth() + 1); renderCalendar(); });

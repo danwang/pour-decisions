@@ -136,8 +136,6 @@
     <div class="sheet">
       <button class="icon-btn close" data-close aria-label="Close"><svg><use href="#i-close"/></svg></button>
       <p class="eyebrow">Endless</p>
-      <h3>Fresh puzzles, forever</h3>
-      <p class="sheet-copy">Auto watches how you play and adjusts: clean solves near par make the next puzzle harder, hints and restarts ease off.</p>
       <div class="tiers" id="tiers" role="radiogroup" aria-label="Difficulty"></div>
       <dl class="stats small">
         <div><dt>Solved</dt><dd id="endlessSolved">0</dd></div>
@@ -153,21 +151,18 @@
     <div class="sheet">
       <button class="icon-btn close" data-close aria-label="Close"><svg><use href="#i-close"/></svg></button>
       <p class="eyebrow">Daily</p>
-      <h3>A new puzzle every day</h3>
       <div class="cal-head">
         <button class="icon-btn" id="calPrev" aria-label="Previous month"><svg><use href="#i-back"/></svg></button>
         <b id="calMonth"></b>
         <button class="icon-btn" id="calNext" aria-label="Next month"><svg class="flip"><use href="#i-back"/></svg></button>
       </div>
       <div class="cal" id="cal"></div>
-      <p class="cal-legend"><span class="k-done">Solved on the day</span><span class="k-late">Caught up</span></p>
       <dl class="stats small">
         <div><dt>Streak</dt><dd id="calStreak">0</dd></div>
         <div><dt>Solved</dt><dd id="calSolved">0</dd></div>
         <div><dt>Stars</dt><dd id="calStars">0</dd></div>
       </dl>
       <button class="btn primary wide" id="calToday">Play today’s puzzle</button>
-      <p class="cal-reset" id="calReset"></p>
     </div>
   </div>
 
@@ -176,13 +171,12 @@
     <div class="sheet">
       <button class="icon-btn close" data-close aria-label="Close"><svg><use href="#i-close"/></svg></button>
       <p class="eyebrow">Settings</p>
-      <h3>Make it yours</h3>
       <div class="toggles">
-        <label class="toggle"><span><b>Sound</b><small>Glass taps, pours and chimes</small></span><input type="checkbox" id="setSound"><i></i></label>
-        <label class="toggle"><span><b>Vibration</b><small>On devices that support it</small></span><input type="checkbox" id="setHaptics"><i></i></label>
+        <label class="toggle"><span><b>Sound</b></span><input type="checkbox" id="setSound"><i></i></label>
+        <label class="toggle"><span><b>Vibration</b></span><input type="checkbox" id="setHaptics"><i></i></label>
         <label class="toggle"><span><b>Color symbols</b><small>A shape on every color, for color-blind play</small></span><input type="checkbox" id="setSymbols"><i></i></label>
-        <label class="toggle"><span><b>Quick pours</b><small>Faster animations</small></span><input type="checkbox" id="setFast"><i></i></label>
-        <label class="toggle"><span><b>Reduce motion</b><small>Pour in place, no flying tubes</small></span><input type="checkbox" id="setReduced"><i></i></label>
+        <label class="toggle"><span><b>Quick pours</b></span><input type="checkbox" id="setFast"><i></i></label>
+        <label class="toggle"><span><b>Reduce motion</b></span><input type="checkbox" id="setReduced"><i></i></label>
         <label class="toggle"><span><b>Ads</b><small>Parody ads after each puzzle. None of them are real.</small></span><input type="checkbox" id="setAds"><i></i></label>
       </div>
       <button class="btn danger wide" id="resetBtn">Reset progress</button>
@@ -225,7 +219,6 @@
     <div class="sheet">
       <button class="icon-btn close" data-close aria-label="Close"><svg><use href="#i-close"/></svg></button>
       <p class="eyebrow">How to play</p>
-      <h3>One color per tube</h3>
       <ol class="rules">
         <li><b>Tap a tube</b> to pick it up, then <b>tap another</b> to pour. You can also drag from one to the other.</li>
         <li>Liquid only pours onto <b>the same color</b> or into an <b>empty tube</b>.</li>
