@@ -1,0 +1,7 @@
+// Cloudflare Workers deploy: serves the static site built into dist/ by
+// tools/build-site.js. No server code. See README "Deploying".
+{
+  "name": "pour-decisions",
+  "compatibility_date": "2026-10-01",
+  "assets": { "directory": "./dist" }
+}

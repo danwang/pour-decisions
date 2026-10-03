@@ -6,10 +6,11 @@
   'use strict';
 
   const C = window.SortCore;
-  const { Board, PALETTE } = window.SortBoard;
+  const { Board, PALETTE, COLOR_NAMES } = window.SortBoard;
   const Sound = window.SortSound;
   const Haptics = window.SortHaptics;
   const LEVELS = window.SortLevels || [];
+  const Cloud = window.PourCloud;
   const $ = (s) => document.querySelector(s);
   const $$ = (s) => Array.from(document.querySelectorAll(s));
 
@@ -17,7 +18,17 @@
     'First Drops', 'Rinse Cycle', 'Bench Work', 'Titration', 'Distillation',
     'Centrifuge', 'Catalyst', 'Chromatography', 'Crystal Garden', 'Grand Assay',
   ];
-  const PER_CHAPTER = 20;
+  // Release number of the newest levels (inserted levels carry `n`); drives "New" badges.
+  const CURRENT_RELEASE = Math.max(1, ...LEVELS.map((L) => L.n || 1));
+  const chapterOf = (n) => (LEVELS[n - 1] && LEVELS[n - 1].ch != null ? LEVELS[n - 1].ch : Math.floor((n - 1) / 20));
+
+  const MECHANIC_NAMES = { heights: 'tall and short tubes', only: 'reserved tubes', locks: 'locked tubes', limit: 'move limits' };
+  const INTRO_TEXT = {
+    heights: 'New: tubes come in different heights. A tube is finished when it holds all 4 of one color, so short tubes are only for storage.',
+    only: 'New: a tube with a colored rim only takes that color.',
+    limit: 'New: this level has a move limit. Undo gives moves back.',
+    locks: 'New: a locked tube opens once a tube of its lock’s color is finished.',
+  };
 
   // ------------------------------------------------------------- storage --
 
@@ -33,10 +44,15 @@
     session: null,
   });
   let save = defaults();
+  // Additive keys. New players have seen everything; returning players get "New" badges.
+  save.newSince = CURRENT_RELEASE;
+  save.newsSeen = CURRENT_RELEASE;
   try {
     const raw = localStorage.getItem(KEY);
     if (raw) {
       const d = window.SortSave.migrate(JSON.parse(raw), C);
+      if (d.newSince == null) d.newSince = 1;
+      if (d.newsSeen == null) d.newsSeen = 1;
       save = Object.assign(defaults(), d);
       save.settings = Object.assign(defaults().settings, d.settings);
       save.endless = Object.assign(defaults().endless, d.endless);
@@ -45,6 +61,7 @@
   } catch (e) { /* storage unavailable: play without saving */ }
   function persist() {
     try { localStorage.setItem(KEY, JSON.stringify(save)); } catch (e) { /* ignore */ }
+    Cloud.changed();
   }
 
   // -------------------------------------------------------------- worker --
@@ -124,8 +141,20 @@
     for (const c of order) if (chosen.length < used.length && !chosen.some((d) => clash(c, d))) chosen.push(c);
     for (const c of order) if (chosen.length < used.length && !chosen.includes(c)) chosen.push(c);
     const map = new Map(used.map((c, i) => [c, chosen[i]]));
-    return { ...puzzle, tubes: puzzle.tubes.map((t) => t.map((c) => map.get(c))) };
+    const out = { ...puzzle, tubes: puzzle.tubes.map((t) => t.map((c) => map.get(c))) };
+    const r = puzzle.rules;
+    if (r && typeof r === 'object') {
+      out.rules = { ...r };
+      if (r.only) out.rules.only = r.only.map((c) => (c == null ? null : map.get(c)));
+      if (r.locks) out.rules.locks = r.locks.map((l) => ({ tube: l.tube, key: map.get(l.key) }));
+    }
+    return out;
   }
+
+  /** Rules for the current puzzle: a number for classic puzzles, else { K, heights, only, locks, limit }. */
+  const rulesOf = (p) => (p.rules != null ? p.rules : p.cap);
+  const limitOf = (p) => (p.rules && typeof p.rules === 'object' && p.rules.limit) || 0;
+  const colorName = (c) => COLOR_NAMES[c] || 'that color';
 
   // Progress is keyed by puzzle content, so levels can be reordered or replaced safely.
   const levelById = new Map(LEVELS.map((L, i) => [L.id, i + 1]));
@@ -144,10 +173,14 @@
     return recolor({
       id: L.id,
       cap: L.c,
+      rules: L.r ? { K: L.c, ...L.r } : L.c,
       tubes: L.t.split(',').map((s) => Array.from(s, (ch) => ch.charCodeAt(0) - 97)),
       par: L.p,
+      proven: !!L.o,
       score: L.s,
       kind: L.k,
+      intro: L.i || null,
+      mechanics: L.m || [],
     }, n * 7919);
   }
 
@@ -270,7 +303,29 @@
     $('#endlessSub').textContent = save.endless.choice === 'auto' ? `Auto · ${C.TIERS[autoTier()].name}` : C.TIERS[+save.endless.choice].name;
     const done = !!save.daily.done[today()];
     $('#dailySub').textContent = done ? `Done · ${save.daily.streak} day${save.daily.streak === 1 ? '' : 's'}` : 'New today';
+    renderNews();
   }
+
+  /**
+   * One-time card for returning players when an update added levels behind
+   * their progress: points at the first new mechanic's intro level.
+   */
+  function renderNews() {
+    const card = $('#newsCard');
+    card.hidden = true;
+    if (save.newsSeen >= CURRENT_RELEASE) return;
+    const next = nextUp();
+    const fresh = LEVELS.map((L, i) => ({ L, n: i + 1 })).filter(({ L }) => (L.n || 1) > save.newsSeen);
+    const behind = fresh.filter(({ n }) => n < next);
+    if (!behind.length) { save.newsSeen = CURRENT_RELEASE; persist(); return; }
+    const intro = behind.find(({ L }) => L.i) || behind[0];
+    const names = [...new Set(behind.flatMap(({ L }) => L.m || []))].map((m) => MECHANIC_NAMES[m]).filter(Boolean);
+    $('#newsText').textContent = `${behind.length} new levels with ${names.join(', ').replace(/, ([^,]*)$/, ' and $1')}.`;
+    $('#newsGo').textContent = `Try level ${intro.n}`;
+    $('#newsGo').onclick = () => { Sound.tap(); save.newsSeen = CURRENT_RELEASE; persist(); startCampaign(intro.n); };
+    card.hidden = false;
+  }
+  $('#newsClose').addEventListener('click', () => { save.newsSeen = CURRENT_RELEASE; persist(); $('#newsCard').hidden = true; });
 
   $('#playBtn').addEventListener('click', () => {
     Sound.unlock(); Sound.tap();
@@ -283,6 +338,7 @@
   $('#dailyBtn').addEventListener('click', () => { Sound.unlock(); Sound.tap(); startDaily(); });
   $('#endlessBtn').addEventListener('click', () => { Sound.unlock(); renderTiers(); openSheet('endlessSheet'); });
   $('#settingsBtn').addEventListener('click', () => { Sound.unlock(); openSheet('settingsSheet'); });
+  $('#accountBtn').addEventListener('click', () => { Sound.unlock(); openSheet('accountSheet'); });
   $('#helpBtn').addEventListener('click', () => { Sound.unlock(); openSheet('helpSheet'); });
 
   // Home demo: a small puzzle that solves itself on a loop.
@@ -339,9 +395,11 @@
     const wrap = $('#levelsScroll');
     const frag = document.createDocumentFragment();
     const current = nextUp();
-    const chapters = Math.ceil(LEVELS.length / PER_CHAPTER);
+    const chapters = chapterOf(LEVELS.length) + 1;
     for (let ch = 0; ch < chapters; ch++) {
-      const from = ch * PER_CHAPTER + 1, to = Math.min(LEVELS.length, from + PER_CHAPTER - 1);
+      let from = 0, to = 0;
+      for (let n = 1; n <= LEVELS.length; n++) if (chapterOf(n) === ch) { if (!from) from = n; to = n; }
+      if (!from) continue;
       let got = 0;
       for (let n = from; n <= to; n++) got += starsOf(n);
       const sec = document.createElement('section');
@@ -367,6 +425,8 @@
         btn.addEventListener('click', () => { Sound.tap(); startCampaign(n); });
         if (L.k === 'boss') btn.insertAdjacentHTML('beforeend', '<svg class="crown"><use href="#i-crown"/></svg>');
         if (L.c === 5) btn.classList.add('cap5');
+        if ((L.n || 1) > save.newSince && !stars) btn.insertAdjacentHTML('beforeend', '<b class="new-badge">New</b>');
+        if (L.m && L.m.length) btn.classList.add('mech');
         grid.appendChild(btn);
       }
       sec.appendChild(grid);
@@ -495,7 +555,7 @@
     }
     closeSheet('winSheet');
     hideToast();
-    board.setPuzzle(G.tubes, puzzle.cap, true);
+    board.setPuzzle(G.tubes, rulesOf(puzzle), true);
     fit();
     renderHud();
     $('#skipBtn').hidden = mode !== 'endless';
@@ -517,20 +577,26 @@
       moves: G.moves, undos: G.undos, hints: G.hints, extra: G.extra, usedExtra: G.usedExtra,
       restarts: G.restarts, elapsed: G.elapsed + (performance.now() - G.startedAt), won: G.won,
     };
+    save.sessionAt = Date.now();
     persist();
   }
 
-  function fit() {
+  /** Size the board to the space between HUD and toolbar, leaving room for a caption. `smooth` slides tubes. */
+  function fit(smooth) {
     const game = $('#game');
     const area = $('#boardArea').getBoundingClientRect();
     const g = game.getBoundingClientRect();
     if (g.width < 10) return;
-    board.resize(g.width, g.height, {
+    const cap = $('#caption');
+    const covered = cap.hidden ? 0 : Math.max(0, area.bottom - cap.getBoundingClientRect().top + 10);
+    const region = {
       x: area.left - g.left + 16,
       y: area.top - g.top + 4,
       w: area.width - 32,
-      h: area.height - 8,
-    });
+      h: area.height - 8 - covered,
+    };
+    if (smooth && board.cssW === g.width && board.cssH === g.height) { board.region = region; board.layout(false); }
+    else board.resize(g.width, g.height, region);
   }
   new ResizeObserver(() => { if (screen === 'game') fit(); if (screen === 'home') demo.fit(); }).observe($('#app'));
 
@@ -540,7 +606,7 @@
     const p = G.puzzle;
     $('#hudTitle').textContent = p.title;
     const kind = $('#hudKind');
-    const kinds = { boss: 'Boss', hard: 'Hard', breather: 'Breather', tutorial: 'Tutorial', daily: 'Daily' };
+    const kinds = { boss: 'Boss', hard: 'Hard', breather: 'Breather', tutorial: 'Tutorial', daily: 'Daily', intro: 'New rule' };
     const k = kinds[p.kind];
     kind.hidden = !k;
     kind.textContent = k || '';
@@ -562,10 +628,19 @@
 
   function updateMoves(bump) {
     const el = $('#hudMoves');
-    el.textContent = G.moves;
-    const par = parFor(G.puzzle.par);
-    el.classList.toggle('over', G.moves > par);
-    $('#hudPar').textContent = `par ${par}`;
+    const limit = limitOf(G.puzzle);
+    if (limit) {
+      // Move-limited: show what's left. Undo gives moves back.
+      const left = limit - G.history.length;
+      el.textContent = left;
+      el.classList.toggle('over', left <= 3);
+      $('#hudPar').textContent = left === 1 ? 'move left' : 'moves left';
+    } else {
+      el.textContent = G.moves;
+      const par = parFor(G.puzzle.par);
+      el.classList.toggle('over', G.moves > par);
+      $('#hudPar').textContent = `par ${par}`;
+    }
     if (bump) { el.classList.remove('bump'); void el.offsetWidth; el.classList.add('bump'); }
     $('#undoBtn').disabled = !G.history.length;
   }
@@ -581,6 +656,9 @@
       btn.onclick = () => { hideToast(); action.run(); };
     } else btn.hidden = true;
     t.hidden = false;
+    // Sit above a caption when one is showing.
+    const cap = $('#caption');
+    t.style.bottom = cap.hidden ? '' : `${$('#game').getBoundingClientRect().bottom - cap.getBoundingClientRect().top + 8}px`;
     t.style.animation = 'none'; void t.offsetWidth; t.style.animation = '';
     clearTimeout(toastTimer);
     if (ms !== 0) toastTimer = setTimeout(hideToast, ms || 2600);
@@ -591,9 +669,12 @@
 
   function caption(text) {
     const c = $('#caption');
+    const was = c.hidden;
     c.hidden = !text;
     $('#captionText').textContent = text || '';
     $('#skipTutorial').hidden = G.mode !== 'tutorial';
+    // The board makes room for a caption (and takes it back), sliding the tubes.
+    if (was !== c.hidden && screen === 'game') requestAnimationFrame(() => fit(true));
   }
 
   function finishTutorial() {
@@ -627,12 +708,14 @@
 
   function tutorial() {
     caption(null);
+    // A level that introduces a mechanic explains it until the first pour.
+    if (G.mode === 'campaign' && G.puzzle.intro && !G.history.length && !G.won) { caption(INTRO_TEXT[G.puzzle.intro]); return; }
     if (G.mode !== 'tutorial' || G.won) return;
     const T = TUTORIAL[G.level];
     if (G.level === 0) caption(G.selected < 0 ? 'Tap a tube to pick it up.' : 'Now tap the tube with the arrow to pour.');
     else caption(T.text);
     if (!T.guided) return;
-    const r = C.solve(G.tubes, G.puzzle.cap, { weight: 1, limit: 20000 });
+    const r = C.solve(G.tubes, rulesOf(G.puzzle), { weight: 1, limit: 20000 });
     if (r.solved && r.moves.length) board.setHint(r.moves[0]);
   }
 
@@ -662,21 +745,40 @@
     return { x: e.clientX - r.left, y: e.clientY - r.top };
   }
 
+  function nope(i, message) {
+    board.shake(i);
+    Sound.invalid();
+    Haptics.buzz(18);
+    if (message) toast(message, null, 1800);
+  }
+  const lockMessage = (i) => `Locked until a ${colorName(C.norm(rulesOf(G.puzzle)).lockKey.get(i))} tube is finished.`;
+  const outOfMoves = () => { const L = limitOf(G.puzzle); return L && G.history.length >= L; };
+
   function tap(i) {
     if (G.won || !G.puzzle) return;
-    const cap = G.puzzle.cap;
+    const rules = rulesOf(G.puzzle);
+    const locked = C.lockedTubes(G.tubes, rules);
     if (G.selected < 0) {
       if (i < 0) return;
       const t = G.tubes[i];
-      if (!t.length || C.isComplete(t, cap)) { board.shake(i); Sound.invalid(); Haptics.buzz(18); return; }
+      if (locked && locked.has(i)) { nope(i, lockMessage(i)); return; }
+      if (!t.length || C.isComplete(t, rules)) { nope(i); return; }
+      if (outOfMoves()) { nope(i); showOutOfMoves(); return; }
       select(i);
       return;
     }
     if (i < 0 || i === G.selected) { deselect(); return; }
-    const n = C.pourAmount(G.tubes, cap, G.selected, i);
+    const n = C.pourAmount(G.tubes, rules, G.selected, i);
     if (n) { doPour(G.selected, i); return; }
     const t = G.tubes[i];
-    if (t.length && !C.isComplete(t, cap)) {
+    if (locked && locked.has(i)) { nope(i, lockMessage(i)); deselect(); return; }
+    const only = C.norm(rules).only(i);
+    if (only >= 0 && t.length < C.norm(rules).h(i) && (!t.length || C.top(t) === C.top(G.tubes[G.selected]))) {
+      nope(i, `This tube only takes ${colorName(only)}.`);
+      deselect();
+      return;
+    }
+    if (t.length && !C.isComplete(t, rules)) {
       // Not a legal pour, but it is a tube you could pick up: switch to it.
       select(i);
     } else {
@@ -690,7 +792,7 @@
   function select(i) {
     G.selected = i;
     board.select(i);
-    Sound.select(G.tubes[i].length / G.puzzle.cap);
+    Sound.select(G.tubes[i].length / C.norm(rulesOf(G.puzzle)).h(i));
     Haptics.buzz(6);
     if (G.mode === 'tutorial' && G.level === 0) tutorial();
   }
@@ -703,9 +805,9 @@
   }
 
   function doPour(a, b) {
-    const cap = G.puzzle.cap;
+    const rules = rulesOf(G.puzzle);
     const c = C.top(G.tubes[a]);
-    const n = C.pour(G.tubes, cap, a, b);
+    const n = C.pour(G.tubes, rules, a, b);
     G.history.push({ a, b, n, c });
     G.moves++;
     G.selected = -1;
@@ -716,15 +818,19 @@
     Haptics.buzz(10);
     hideToast();
     updateMoves(true);
-    if (C.isSolved(G.tubes, cap)) {
+    if (C.isSolved(G.tubes, rules)) {
       G.won = true;
       G.elapsed += performance.now() - G.startedAt;
       caption(null);
     } else {
-      G.stuck = !C.usefulMoves(G.tubes, cap).length;
+      G.stuck = !C.usefulMoves(G.tubes, rules).length || outOfMoves();
       tutorial();
     }
     saveSession();
+  }
+
+  function showOutOfMoves() {
+    toast('Out of moves. Undo to get some back, or restart.', G.history.length ? { label: 'Undo', run: undo } : { label: 'Restart', run: restart }, 0);
   }
 
   let winShown = false;
@@ -734,6 +840,9 @@
       const done = board.tubes.filter((t) => t.corked).length;
       Sound.complete(done - 1);
       Haptics.buzz([14, 50, 14]);
+    } else if (type === 'unlock') {
+      Sound.complete(4);
+      Haptics.buzz([10, 30, 10]);
     } else if (type === 'idle') {
       if (G.won && $('#winSheet').hidden && !winShown) {
         winShown = true;
@@ -744,7 +853,8 @@
         } else setTimeout(win, 420);
       }
       else if (G.stuck && !G.won) {
-        toast(G.extra ? 'No moves left. Undo or restart.' : 'No moves left. Undo, or add a tube.', G.history.length ? { label: 'Undo', run: undo } : null, 0);
+        if (outOfMoves()) showOutOfMoves();
+        else toast(G.extra ? 'No moves left. Undo or restart.' : 'No moves left. Undo, or add a tube.', G.history.length ? { label: 'Undo', run: undo } : null, 0);
       }
     }
   };
@@ -803,14 +913,17 @@
     hintBusy = true;
     $('#hintBtn').classList.add('busy');
     try {
-      const r = await work('hint', { tubes: G.tubes, cap: G.puzzle.cap });
+      const rules = C.rulesSpec(rulesOf(G.puzzle));
+      const limit = limitOf(G.puzzle);
+      const remaining = limit ? limit - G.history.length : undefined;
+      const r = await work('hint', { tubes: G.tubes, cap: rules, remaining });
       if (token !== G.token) return;
       if (r.status === 'move') {
         G.hints++;
         board.setHint(r.move);
         if (G.selected >= 0 && G.selected !== r.move[0]) deselect();
         toast(`Pour the circled tube where the arrow points. ${r.left} move${r.left === 1 ? '' : 's'} from a solve.`);
-      } else if (r.status === 'dead') {
+      } else if (r.status === 'dead' || r.status === 'over') {
         const states = [];
         const t = C.clone(G.tubes);
         for (let k = G.history.length - 1; k >= 0 && states.length < 40; k--) {
@@ -818,10 +931,13 @@
           for (let j = 0; j < m.n; j++) t[m.a].push(t[m.b].pop());
           states.push(C.clone(t));
         }
-        const back = states.length ? (await work('rescue', { states, cap: G.puzzle.cap })).back : 0;
+        // Under a move limit, undoing k moves leaves (remaining + k) moves to finish.
+        const rem = limit ? states.map((_, k) => remaining + k + 1) : undefined;
+        const back = states.length ? (await work('rescue', { states, cap: rules, remaining: rem })).back : 0;
         if (token !== G.token) return;
+        const why = r.status === 'over' ? 'This can’t be finished within the move limit.' : 'This position can’t be solved.';
         if (back) {
-          toast(`This position can’t be solved. Undo ${back} move${back === 1 ? '' : 's'} to get back on track.`,
+          toast(`${why} Undo ${back} move${back === 1 ? '' : 's'} to get back on track.`,
             { label: `Undo ${back}`, run: () => { for (let k = 0; k < back; k++) undo(); } }, 0);
         } else toast('This one needs a fresh start.', { label: 'Restart', run: restart }, 0);
       } else {
@@ -865,7 +981,7 @@
   // ------------------------------------------------------------------ win --
 
   // Parody interstitials (js/fakeads.js). Shown once per solved puzzle, never in the tutorial.
-  const ads = window.FakeAds ? window.FakeAds.create({ countdown: 5 }) : null;
+  const ads = window.FakeAds ? window.FakeAds.create({ countdown: 5, earlyClose: true }) : null;
   function afterAd(then) {
     if (!ads || !save.settings.ads || G.mode === 'tutorial') { then(); return; }
     // Let the confetti land before the ad barges in, like the real thing.
@@ -883,15 +999,21 @@
   function win() {
     const best = G.puzzle.par;
     const assists = (G.hints > 0 ? 1 : 0) + (G.usedExtra ? 1 : 0);
-    const stars = G.mode === 'tutorial' ? 3 : starsFor(G.moves, best, assists);
+    // Under a move limit undo refunds moves, so what counts is the moves in the final solution.
+    const counted = limitOf(G.puzzle) ? G.history.length : G.moves;
+    const stars = G.mode === 'tutorial' ? 3 : starsFor(counted, best, assists);
     board.confetti();
     Sound.win();
     Haptics.buzz([20, 60, 20, 60, 40]);
 
     let title = 'Sorted!', eyebrow = G.puzzle.title, next = 'Next level', note = '';
-    if (G.moves <= best) note = `Perfect. ${best} is the fewest moves possible.`;
-    else if (stars === 3) note = `Under par. The best possible is ${best}.`;
-    else note = `Par is ${parFor(best)}. The best possible is ${best}.`;
+    // Only claim a minimum the solver proved. Otherwise it's the best it found.
+    const proven = G.puzzle.proven || G.puzzle.optimal;
+    const bestLabel = proven ? `The fewest possible is ${best}.` : `Our solver’s best is ${best}.`;
+    if (counted < best && !proven && !G.usedExtra) note = `You beat our solver! Its best was ${best}.`;
+    else if (counted <= best) note = proven ? `Perfect. ${best} is the fewest moves possible.` : `Perfect. ${best} matches our solver’s best.`;
+    else if (stars === 3) note = `Under par. ${bestLabel}`;
+    else note = `Par is ${parFor(best)}. ${bestLabel}`;
     if (assists && G.mode !== 'tutorial') note += G.hints && G.usedExtra ? ' Hint and extra tube used.' : G.hints ? ' Hint used.' : ' Extra tube used.';
 
     if (G.mode === 'tutorial') {
@@ -904,10 +1026,10 @@
       const n = G.level;
       const rec = save.progress[G.puzzle.id] || (save.progress[G.puzzle.id] = {});
       rec.stars = Math.max(rec.stars || 0, stars);
-      rec.best = Math.min(rec.best || Infinity, G.moves);
+      rec.best = Math.min(rec.best || Infinity, counted);
       if (G.puzzle.kind === 'boss') title = 'Boss cleared!';
       if (n >= LEVELS.length) { next = 'Try Endless'; }
-      if (n % PER_CHAPTER === 0 && n < LEVELS.length) eyebrow = `Chapter ${n / PER_CHAPTER} complete`;
+      if (n < LEVELS.length && chapterOf(n + 1) !== chapterOf(n)) eyebrow = `Chapter ${chapterOf(n) + 1} complete`;
     } else if (G.mode === 'endless') {
       const E = save.endless;
       E.solved++;
@@ -934,12 +1056,13 @@
       next = 'Play Endless';
     }
     save.session = null;
+    save.sessionAt = Date.now();
     persist();
 
     $('#winEyebrow').textContent = eyebrow;
     $('#winTitle').textContent = title;
     $('#winNote').textContent = note;
-    $('#winMoves').textContent = G.moves;
+    $('#winMoves').textContent = counted;
     $('#winPar').textContent = parFor(best);
     $('#winTime').textContent = fmtTime(G.elapsed);
     $('#winNext').textContent = next;
@@ -996,7 +1119,7 @@
     const b = $('#resetBtn');
     if (!resetArmed) {
       b.classList.add('armed');
-      b.textContent = 'Tap again to erase all progress';
+      b.textContent = Cloud.user ? 'Tap again to erase progress on every device' : 'Tap again to erase all progress';
       resetArmed = setTimeout(() => { b.classList.remove('armed'); b.textContent = 'Reset progress'; resetArmed = null; }, 3000);
       return;
     }
@@ -1004,7 +1127,13 @@
     const settings = save.settings;
     save = defaults();
     save.settings = settings;
-    persist();
+    if (Cloud.user) {
+      // Signed in: the account is reset too, and other devices drop their old copy when they next sync.
+      save.resetAt = Date.now();
+      save.syncedAs = Cloud.user.id;
+      persist();
+      Cloud.sync({ replace: true });
+    } else persist();
     b.classList.remove('armed');
     b.textContent = 'Progress erased';
     setTimeout(() => { b.textContent = 'Reset progress'; }, 1800);
@@ -1043,6 +1172,19 @@
   applySettings();
   history.replaceState({ screen: 'home', depth: 0 }, '');
   show('home');
+
+  // Sign-in and sync (js/cloud.js). A merged save from the account replaces ours wholesale.
+  Cloud.init({
+    get: () => save,
+    set(next) {
+      save = next;
+      try { localStorage.setItem(KEY, JSON.stringify(save)); } catch (e) { /* ignore */ }
+      if (screen === 'home') refreshHome();
+      else if (screen === 'levels') renderLevels();
+    },
+    open: () => openSheet('accountSheet'),
+  });
+
   // Test handle for local development only.
   if (/^(localhost|127\.0\.0\.1)$/.test(location.hostname)) window.PourDebug = { G, board, tap, begin: (...a) => begin(...a), startCampaign, startEndless, startDaily, ads, save: () => save };
 })();

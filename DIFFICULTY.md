@@ -19,7 +19,9 @@ Size sets the broad level. Arrangement is where most of the fine control lives, 
 
 Every candidate puzzle gets three measurements.
 
-**1. Par: the fewest moves, from A\*.** Tubes are interchangeable, so a state's key is its sorted tube list. The heuristic is `color runs − colors`. No pour ever splits a run, and a pour merges at most one run into another, so the heuristic never overestimates and A* returns the true optimum. Pruning skips moves that can't help: pouring out of a finished tube, pouring a one-color tube into an empty one, and choosing between equivalent empty tubes. All 200 shipped levels have a verified optimal par; the slowest takes 0.7s to prove.
+**1. Par: the fewest moves, from A\*.** Tubes are interchangeable, so a state's key is its sorted tube list. The heuristic is `color runs − colors`. No pour ever splits a run, and a pour merges at most one run into another, so the heuristic never overestimates and A* returns the true optimum. Pruning skips moves that can't help: pouring out of a finished tube, pouring a one-color tube into an empty one, and choosing between equivalent empty tubes. Candidates are screened with a small search budget; the chosen puzzle then gets a deep exact search (900,000 positions), and the level records `o: 1` when its minimum is proven. `node tools/verify-pars.js` re-checks every level in parallel (about 8 seconds) and `--fix` corrects any stale count. If a minimum is ever unproven, the win screen says "our solver's best" rather than "the fewest possible", and congratulates a player who beats it.
+
+An earlier build screened with the small budget only, and 4 of 240 levels stored a count that wasn't the minimum (old level 170 recorded 56; the true minimum is 50). They have been corrected; this changed only metadata, so ids and saved stars are unaffected.
 
 **2. Effort: a simulated player.** The model player plays greedily with some noise. It likes pours onto the same color, likes finishing tubes, and dislikes spending empty tubes. When it runs out of fresh moves, it undoes and tries its next idea, like a person with an undo button. **Effort** is the average number of moves, undos included, over 16 simulated plays.
 
@@ -92,6 +94,31 @@ The median gap between a level's target and its actual score is 0.04 (90th perce
 
 Changing the curve regenerates every level, so saved progress is keyed by puzzle content, not level number (see "Saved progress" in the README).
 
+## Mechanics
+
+Four extra rules, all handled by the same rules engine, solver and player model. Every rules function takes either a number (classic) or `{ K, heights, only, locks, limit }`.
+
+| Mechanic | Rule | How the solver handles it | Avg. difficulty added |
+|---|---|---|---:|
+| Tall and short tubes | Per-tube capacity. A tube is finished when it holds all K units of one color, so short tubes are only storage. | Capacity per tube; tubes of different kinds are no longer interchangeable, so the state key includes each tube's kind. | +0.30 |
+| Reserved tube | Takes only its color. | One more check in the pour rule. | +0.26 |
+| Locked tube | Sealed until a tube of the key color is finished. | Finished tubes are corked (nothing pours out), so a lock's state follows from the position; no extra search state. | +0.50 |
+| Move limit | Solve within `ceil(1.25 × fewest) + 1` moves; undo gives moves back. | Par is unchanged. The simulated player treats lines longer than the limit as dead ends, so the score rises when the limit bites. | +0.62 |
+
+The offsets come from `node tools/calibrate-mechanics.js`, which compares median scores with and without each mechanic at 6, 8 and 10 colors. The generator subtracts them from a slot's target when choosing board size (combinations are treated as additive), then picks the candidate closest to the target as usual.
+
+The heuristic stays admissible: restrictions and locks only remove moves, and no pour splits a run.
+
+### Where they appear
+
+`tools/campaign-plan.js` inserts five levels per chapter from chapter 3 on (chapters 3+ have 25 levels):
+
+- Chapter 3 introduces tall and short tubes, chapter 4 reserved tubes, chapter 5 move limits, chapter 6 locks.
+- An intro level aims 0.5 easier than its neighbors; each chapter's last inserted level aims 0.6 harder and mixes mechanics.
+- Later chapters combine them.
+
+Inserted levels are aimed at the average of the two base levels around them, so the curve stays smooth.
+
 ## Endless and Daily
 
 - **Endless → Auto** is a continuous dial from 0 to 6, mapped to `target = 3.4 + 1.15 × dial`:
@@ -122,7 +149,7 @@ Changing the curve regenerates every level, so saved progress is keyed by puzzle
 | Size choice | `sizeForTarget`, and `SIZE_TABLE` (rerun `tools/calibrate.js`) |
 | Endless adaptation | the dial steps in `win()` in `js/game.js`, and `autoTarget` |
 
-Then run `node tools/build-levels.js && node tools/test.js`. Bump the seed prefix in `tools/build-levels.js` (`campaign-v3-`) when you want fresh deals at the same targets.
+Then run `node tools/build-levels.js && node tools/test.js`. The build only generates new slots; shipped puzzles never change (see "Adding levels without breaking saves" in the README). Changing base-curve constants affects only a `--rebuild-base`, which is for starting a new campaign.
 
 ## Next step: real player data
 

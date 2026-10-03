@@ -43,5 +43,63 @@
     return d;
   }
 
-  root.SortSave = { SCHEMA, migrate };
+  const dayKey = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  /** Consecutive days in `done` ending at `last` (YYYY-MM-DD). */
+  function streakTo(done, last) {
+    if (!last || !done[last]) return 0;
+    const [y, m, d] = last.split('-').map(Number);
+    const day = new Date(y, m - 1, d);
+    let n = 0;
+    while (done[dayKey(day)]) { n++; day.setDate(day.getDate() - 1); }
+    return n;
+  }
+
+  /**
+   * Combine this device's save (`a`) with the account's (`b`), both migrated.
+   * Solves are never lost: stars and daily results are unioned, endless
+   * follows whichever side has played more, and the unfinished puzzle is the
+   * one touched last. Settings stay per device.
+   *
+   * A reset made while signed in is recorded as `resetAt`. A device that
+   * synced with this account (`user`) before that reset holds stale progress,
+   * so the account's copy replaces it instead of merging.
+   */
+  function merge(a, b, user) {
+    if (!b) return a;
+    if ((b.resetAt || 0) > (a.resetAt || 0) && a.syncedAs === user) return Object.assign({}, b, { settings: a.settings });
+    const out = Object.assign({}, b, a);
+    out.v = Math.max(a.v || 1, b.v || 1);
+    out.resetAt = Math.max(a.resetAt || 0, b.resetAt || 0) || undefined;
+
+    out.progress = {};
+    for (const src of [a.progress || {}, b.progress || {}]) {
+      for (const id of Object.keys(src)) {
+        const r = src[id], m = out.progress[id] || (out.progress[id] = {});
+        if (r.stars) m.stars = Math.max(m.stars || 0, r.stars);
+        if (r.best) m.best = Math.min(m.best || Infinity, r.best);
+      }
+    }
+    out.tutorialDone = !!(a.tutorialDone || b.tutorialDone);
+    if (a.newSince != null && b.newSince != null) out.newSince = Math.min(a.newSince, b.newSince);
+    if (a.newsSeen != null && b.newsSeen != null) out.newsSeen = Math.max(a.newsSeen, b.newsSeen);
+
+    const ea = a.endless || {}, eb = b.endless || {};
+    const played = (eb.solved || 0) > (ea.solved || 0) ? eb : ea;
+    out.endless = Object.assign({}, eb, ea, { auto: played.auto, solved: played.solved, streak: played.streak });
+
+    const da = a.daily || {}, db = b.daily || {};
+    const done = Object.assign({}, db.done);
+    for (const k of Object.keys(da.done || {})) done[k] = Math.max(done[k] || 0, da.done[k]);
+    const last = (da.last || '') > (db.last || '') ? da.last : db.last || da.last || '';
+    const sides = [da, db].filter((d) => d.last === last).map((d) => d.streak || 0);
+    out.daily = { done, last, streak: Math.max(streakTo(done, last), ...sides, 0) };
+
+    const s = (b.sessionAt || 0) > (a.sessionAt || 0) ? b : a;
+    out.session = s.session || null;
+    out.sessionAt = s.sessionAt;
+    out.settings = a.settings;
+    return out;
+  }
+
+  root.SortSave = { SCHEMA, migrate, merge };
 })(typeof self !== 'undefined' ? self : this);

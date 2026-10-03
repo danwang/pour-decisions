@@ -9,7 +9,8 @@
  * Options (create or per show): countdown (seconds), id (a specific ad),
  * reducedMotion, container + inline (render inside a positioned element
  * instead of covering the page), captureKeys (default true: the page
- * behind gets no key presses while the ad is up).
+ * behind gets no key presses while the ad is up), earlyClose (default
+ * false: the countdown still plays, but tapping it closes the ad).
  *
  * Ads ("creatives") live in a catalog. Register your own with
  * FakeAds.register({ id, brand, tagline, render(stage, api) { … } }).
@@ -59,7 +60,7 @@
 .fa-close circle{fill:none;stroke:#fff;stroke-width:2.5;stroke-linecap:round}
 .fa-close .fa-num{font:700 13px/1 system-ui,sans-serif;font-variant-numeric:tabular-nums}
 .fa-close .fa-x{display:none;font:400 18px/1 system-ui,sans-serif}
-.fa-close.ready{cursor:pointer}
+.fa-close.ready,.fa-close.early{cursor:pointer}
 .fa-close.ready .fa-num,.fa-close.ready svg{display:none}
 .fa-close.ready .fa-x{display:block}
 .fa-close.ready .fa-dial{background:rgba(0,0,0,.7);animation:fa-pop .25s cubic-bezier(.3,1.6,.5,1)}
@@ -238,7 +239,7 @@
       function renderCountdown() {
         num.textContent = String(Math.max(1, Math.ceil(remaining)));
         ring.style.strokeDashoffset = String(circ * (1 - remaining / (total || 1)));
-        close.setAttribute('aria-label', ready ? 'Close ad' : `Close ad in ${Math.ceil(remaining)} seconds`);
+        close.setAttribute('aria-label', ready || so.earlyClose ? 'Close ad' : `Close ad in ${Math.ceil(remaining)} seconds`);
       }
       function tickCountdown(dt) {
         if (ready) return;
@@ -253,6 +254,7 @@
         renderCountdown();
       }
       if (ready) close.classList.add('ready');
+      if (so.earlyClose) close.classList.add('early');
       renderCountdown();
 
       // ---- interactions
@@ -265,7 +267,7 @@
       });
       let shamed = false;
       close.addEventListener('click', () => {
-        if (!ready) { toast(api.pick(EARLY_TAPS)); return; }
+        if (!ready && !so.earlyClose) { toast(api.pick(EARLY_TAPS)); return; }
         if (ad.confirmshame && !shamed) { shamed = true; showShame(); return; }
         finish();
       });
@@ -294,7 +296,7 @@
           const i = focusables.indexOf(document.activeElement);
           const nextEl = focusables[(i + (e.shiftKey ? -1 : 1) + focusables.length) % focusables.length];
           if (nextEl) nextEl.focus();
-        } else if ((e.key === 'Escape') && ready) {
+        } else if (e.key === 'Escape' && (ready || so.earlyClose)) {
           e.preventDefault();
           close.click();
         }

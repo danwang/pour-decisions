@@ -1,0 +1,82 @@
+<!doctype html>
+<!--
+  Sign-in email. Paste into Supabase → Authentication → Email Templates,
+  for both "Magic Link" and "Confirm signup" (a first sign-in sends the
+  second). Suggested subject: Your Pour Decisions code: {{ .Token }}
+  Email apps ignore <style> blocks and gradients, so everything is inline
+  and solid colors.
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="dark">
+<meta name="supported-color-schemes" content="dark">
+<title>Sign in to Pour Decisions</title>
+</head>
+<body style="margin:0; padding:0; background:#0b0e26;">
+<div style="display:none; max-height:0; overflow:hidden; opacity:0;">Your code is {{ .Token }}, or tap the button to sign in.</div>
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#0b0e26;">
+  <tr>
+    <td align="center" style="padding:32px 16px;">
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width:440px; background:#1b2150; border:1px solid #2c3470; border-radius:24px;">
+
+        <!-- Wordmark -->
+        <tr>
+          <td align="center" style="padding:36px 24px 0; font-family:'Arial Rounded MT Bold','Trebuchet MS',Arial,sans-serif; font-weight:800; line-height:1;">
+            <div style="font-size:44px; letter-spacing:-1px;"><span style="color:#ff7b8a;">P</span><span style="color:#ffcf5a;">o</span><span style="color:#9fe03a;">u</span><span style="color:#52c6ff;">r</span></div>
+            <div style="font-size:24px; color:#eef1ff; padding-top:2px;">Decisions</div>
+          </td>
+        </tr>
+
+        <!-- Four sorted tubes -->
+        <tr>
+          <td align="center" style="padding:24px 0 8px;">
+            <table role="presentation" cellpadding="0" cellspacing="0" border="0">
+              <tr>
+                <td style="padding:0 7px;"><table role="presentation" cellpadding="0" cellspacing="0" border="0" style="border:2px solid #4a5396; border-top:0; border-radius:0 0 14px 14px;"><tr><td style="width:22px; height:8px; font-size:0; line-height:0;">&nbsp;</td></tr><tr><td style="width:22px; height:48px; background:#f0434f; border-radius:0 0 12px 12px; font-size:0; line-height:0;">&nbsp;</td></tr></table></td>
+                <td style="padding:0 7px;"><table role="presentation" cellpadding="0" cellspacing="0" border="0" style="border:2px solid #4a5396; border-top:0; border-radius:0 0 14px 14px;"><tr><td style="width:22px; height:8px; font-size:0; line-height:0;">&nbsp;</td></tr><tr><td style="width:22px; height:48px; background:#ffd23f; border-radius:0 0 12px 12px; font-size:0; line-height:0;">&nbsp;</td></tr></table></td>
+                <td style="padding:0 7px;"><table role="presentation" cellpadding="0" cellspacing="0" border="0" style="border:2px solid #4a5396; border-top:0; border-radius:0 0 14px 14px;"><tr><td style="width:22px; height:8px; font-size:0; line-height:0;">&nbsp;</td></tr><tr><td style="width:22px; height:48px; background:#1ecbb8; border-radius:0 0 12px 12px; font-size:0; line-height:0;">&nbsp;</td></tr></table></td>
+                <td style="padding:0 7px;"><table role="presentation" cellpadding="0" cellspacing="0" border="0" style="border:2px solid #4a5396; border-top:0; border-radius:0 0 14px 14px;"><tr><td style="width:22px; height:8px; font-size:0; line-height:0;">&nbsp;</td></tr><tr><td style="width:22px; height:48px; background:#3b63ee; border-radius:0 0 12px 12px; font-size:0; line-height:0;">&nbsp;</td></tr></table></td>
+              </tr>
+            </table>
+          </td>
+        </tr>
+
+        <!-- Code -->
+        <tr>
+          <td align="center" style="padding:20px 28px 0; font-family:'Trebuchet MS',Arial,sans-serif;">
+            <div style="font-size:12px; font-weight:bold; letter-spacing:2px; text-transform:uppercase; color:#9aa3d8;">Your sign-in code</div>
+            <div style="margin-top:12px; padding:16px 12px; background:#0f1330; border:1px solid #2c3470; border-radius:16px; font-family:'SF Mono',Menlo,Consolas,'Courier New',monospace; font-size:34px; font-weight:bold; letter-spacing:8px; color:#ffcf5a;">{{ .Token }}</div>
+            <div style="margin-top:12px; font-size:15px; line-height:1.5; color:#9aa3d8;">Enter it in the game on the device you’re signing in on.</div>
+          </td>
+        </tr>
+
+        <!-- Button -->
+        <tr>
+          <td align="center" style="padding:24px 28px 0; font-family:'Trebuchet MS',Arial,sans-serif;">
+            <div style="font-size:15px; color:#9aa3d8; padding-bottom:12px;">Or sign in with one tap:</div>
+            <table role="presentation" cellpadding="0" cellspacing="0" border="0">
+              <tr>
+                <td align="center" style="background:#ffcf5a; border-radius:16px; border-bottom:3px solid #b9801a;">
+                  <a href="{{ .ConfirmationURL }}" style="display:inline-block; padding:15px 34px; font-family:'Arial Rounded MT Bold','Trebuchet MS',Arial,sans-serif; font-size:17px; font-weight:800; color:#3b2800; text-decoration:none;">Sign in to Pour Decisions</a>
+                </td>
+              </tr>
+            </table>
+          </td>
+        </tr>
+
+        <!-- Footer -->
+        <tr>
+          <td align="center" style="padding:28px 28px 32px; font-family:'Trebuchet MS',Arial,sans-serif; font-size:13px; line-height:1.5; color:#6770a8;">
+            The code and the button each work once, and expire soon.<br>
+            Didn’t ask to sign in? You can ignore this email.
+          </td>
+        </tr>
+
+      </table>
+    </td>
+  </tr>
+</table>
+</body>
+</html>

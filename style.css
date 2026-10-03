@@ -127,6 +127,14 @@ svg { width: 24px; height: 24px; flex: none; }
 
 #home { align-items: center; padding-inline: 16px; padding-block: 12px 20px; }
 .home-top { align-self: stretch; display: flex; justify-content: space-between; }
+.home-top-right { display: flex; gap: 10px; }
+#accountBtn { position: relative; }
+#accountBtn.on { color: var(--teal); }
+#accountBtn.on::after {
+  content: ""; position: absolute; top: 8px; right: 8px;
+  width: 8px; height: 8px; border-radius: 50%;
+  background: var(--teal); box-shadow: 0 0 0 2px var(--ink-2);
+}
 .brand { text-align: center; margin-top: 2vh; }
 .wordmark {
   margin: 0;
@@ -209,6 +217,26 @@ svg { width: 24px; height: 24px; flex: none; }
   animation: breathe 1.8s ease-in-out infinite;
 }
 .level.current .mini-stars { color: rgba(59, 40, 0, 0.25); }
+.level .new-badge {
+  position: absolute; top: -7px; left: -5px;
+  padding: 2px 5px; border-radius: 6px;
+  background: var(--teal); color: #03201c;
+  font: 800 9px/1.2 var(--body); letter-spacing: .06em; text-transform: uppercase;
+}
+.level.mech::before {
+  content: ""; position: absolute; bottom: 5px; right: 6px;
+  width: 6px; height: 6px; border-radius: 50%; background: var(--teal); opacity: .8;
+}
+.news {
+  width: 100%; display: flex; align-items: center; gap: 10px;
+  padding-block: 10px; padding-inline: 14px 6px;
+  border-radius: 16px; background: rgba(65, 214, 195, 0.12); border: 1px solid rgba(65, 214, 195, 0.35);
+}
+.news p { margin: 0; flex: 1; display: flex; flex-direction: column; gap: 2px; font-size: 13px; color: var(--muted); }
+.news b { color: var(--teal); font: 800 14px/1.2 var(--display); }
+.news-go { flex: none; min-height: 40px; padding-inline: 14px; border-radius: 12px; background: var(--teal); color: #03201c; font: 800 14px/1 var(--display); }
+.news-close { flex: none; width: 36px; height: 40px; display: grid; place-items: center; color: var(--muted); }
+.news-close svg { width: 18px; height: 18px; }
 .level .crown { position: absolute; top: -7px; right: -5px; width: 20px; height: 20px; color: var(--rose); filter: drop-shadow(0 2px 2px rgba(0, 0, 0, 0.4)); }
 .level.cap5::after {
   content: "5";
@@ -418,6 +446,30 @@ svg { width: 24px; height: 24px; flex: none; }
 }
 .toggle input:checked + i { background: var(--teal); }
 .toggle input:checked + i::after { transform: translateX(20px); }
+
+/* Sign-in and sync, in the settings sheet. */
+.account { display: flex; flex-direction: column; gap: 10px; }
+.account > div { display: flex; flex-direction: column; gap: 10px; }
+.acct-row { display: flex; gap: 8px; }
+.acct-row input {
+  flex: 1; min-width: 0; min-height: 52px; padding-inline: 16px;
+  border-radius: 16px; border: 1px solid var(--line);
+  background: rgba(6, 8, 24, 0.45); color: var(--text);
+  font: 700 16px/1 var(--body); /* 16px keeps iOS from zooming in */
+  -webkit-user-select: text; user-select: text;
+}
+.acct-row input::placeholder { color: var(--faint); }
+.acct-row input:focus-visible { outline: 3px solid var(--gold); outline-offset: 1px; }
+#acctCodeInput { letter-spacing: 0.2em; font-variant-numeric: tabular-nums; }
+.acct-row .btn { flex: none; }
+#acctCode .link-btn { align-self: flex-start; margin: -6px 0 0 -10px; }
+.account > .acct-in { flex-direction: row; align-items: center; justify-content: space-between; gap: 12px; }
+.acct-in p { margin: 0; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.acct-in b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.acct-in small { color: var(--muted); font-size: 13px; }
+.acct-in .link-btn { flex: none; }
+.acct-error { margin: 0; color: #ffb3bf; font-size: 14px; }
+.account button:disabled, .account input:disabled { opacity: 0.55; cursor: default; }
 
 .rules { margin: 0; padding-left: 22px; display: flex; flex-direction: column; gap: 8px; }
 .rules li { padding-left: 4px; }

@@ -24,6 +24,7 @@
     <symbol id="i-infinity" viewBox="0 0 24 24"><path d="M12 12c-2-2.7-3.6-4-5.5-4a4 4 0 000 8c1.9 0 3.5-1.3 5.5-4zm0 0c2 2.7 3.6 4 5.5 4a4 4 0 000-8c-1.9 0-3.5 1.3-5.5 4z" fill="none" stroke="currentColor" stroke-width="2.2"/></symbol>
     <symbol id="i-sun" viewBox="0 0 24 24"><rect x="3.5" y="5" width="17" height="15.5" rx="3" fill="none" stroke="currentColor" stroke-width="2.2"/><path d="M3.5 10h17M8 2.5v4M16 2.5v4" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/><circle cx="12" cy="15.2" r="1.8" fill="currentColor"/></symbol>
     <symbol id="i-skip" viewBox="0 0 24 24"><path d="M5 5l9 7-9 7zM18 5v14" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linejoin="round" stroke-linecap="round"/></symbol>
+    <symbol id="i-user" viewBox="0 0 24 24"><circle cx="12" cy="8.2" r="4" fill="none" stroke="currentColor" stroke-width="2.2"/><path d="M4.5 20.5c.8-3.9 3.8-6 7.5-6s6.7 2.1 7.5 6" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></symbol>
     <symbol id="i-close" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"/></symbol>
   </defs>
 </svg>
@@ -34,13 +35,21 @@
   <section id="home" class="screen active" aria-label="Home">
     <div class="home-top">
       <button class="icon-btn" id="helpBtn" aria-label="How to play"><svg><use href="#i-help"/></svg></button>
-      <button class="icon-btn" id="settingsBtn" aria-label="Settings"><svg><use href="#i-gear"/></svg></button>
+      <div class="home-top-right">
+        <button class="icon-btn" id="accountBtn" aria-label="Sign in to sync progress" hidden><svg><use href="#i-user"/></svg></button>
+        <button class="icon-btn" id="settingsBtn" aria-label="Settings"><svg><use href="#i-gear"/></svg></button>
+      </div>
     </div>
     <div class="brand">
       <h1 class="wordmark"><span>Pour</span><span>Decisions</span></h1>
     </div>
     <div class="demo-wrap"><canvas id="demo" aria-hidden="true"></canvas></div>
     <div class="home-actions">
+      <div class="news" id="newsCard" hidden>
+        <p><b>New levels</b><span id="newsText"></span></p>
+        <button class="news-go" id="newsGo">Try it</button>
+        <button class="news-close" id="newsClose" aria-label="Dismiss"><svg><use href="#i-close"/></svg></button>
+      </div>
       <button class="btn primary big" id="playBtn">
         <span class="btn-label" id="playLabel">Play</span>
         <span class="btn-sub" id="playSub">Level 1</span>
@@ -157,6 +166,37 @@
     </div>
   </div>
 
+  <!-- Account -->
+  <div class="overlay" id="accountSheet" hidden>
+    <div class="sheet">
+      <button class="icon-btn close" data-close aria-label="Close"><svg><use href="#i-close"/></svg></button>
+      <p class="eyebrow">Account</p>
+      <h3 id="acctTitle">Sync your progress</h3>
+      <div class="account" id="account">
+        <div id="acctOut">
+          <p class="sheet-copy">Sign in to keep your stars, streaks and unfinished puzzle on every device. We’ll email you a link and a code. No password needed.</p>
+          <form class="acct-row" id="acctEmailForm">
+            <input type="email" id="acctEmail" placeholder="you@example.com" autocomplete="email" required aria-label="Email">
+            <button class="btn ghost" type="submit">Send</button>
+          </form>
+        </div>
+        <div id="acctCode" hidden>
+          <p class="sheet-copy">Sent to <b id="acctSentTo"></b>. Tap the link in the email, or enter its code here.</p>
+          <form class="acct-row" id="acctCodeForm">
+            <input type="text" id="acctCodeInput" inputmode="numeric" autocomplete="one-time-code" placeholder="Code" maxlength="10" aria-label="Code from the email">
+            <button class="btn primary" type="submit">Sign in</button>
+          </form>
+          <button class="link-btn" id="acctRestart">Use a different email</button>
+        </div>
+        <div class="acct-in" id="acctIn" hidden>
+          <p><small>Signed in as</small><b id="acctWho"></b><small id="acctStatus"></small></p>
+          <button class="link-btn" id="acctSignOut">Sign out</button>
+        </div>
+        <p class="acct-error" id="acctError" role="alert" hidden></p>
+      </div>
+    </div>
+  </div>
+
   <!-- Help -->
   <div class="overlay" id="helpSheet" hidden>
     <div class="sheet">
@@ -167,8 +207,9 @@
         <li><b>Tap a tube</b> to pick it up, then <b>tap another</b> to pour. You can also drag from one to the other.</li>
         <li>Liquid only pours onto <b>the same color</b> or into an <b>empty tube</b>.</li>
         <li>The whole top color pours at once, as much as fits.</li>
-        <li>A tube is done when it's <b>full of one color</b>. It gets a cork.</li>
+        <li>A tube is done when it holds <b>all 4 of one color</b>. It gets a cork.</li>
       </ol>
+      <p class="sheet-copy">Later chapters add twists: <b>tall and short tubes</b>, tubes with a colored rim that <b>only take that color</b>, <b>locked tubes</b> that open when a tube of the lock's color is finished, and <b>move limits</b> (undo gives moves back).</p>
       <p class="sheet-copy"><b>Par</b> is the move count for three stars. Hints and the extra tube each cost a star, undo is free.</p>
       <p class="sheet-copy keys">Keyboard: <kbd>1</kbd>–<kbd>9</kbd> pick tubes, <kbd>Z</kbd> undo, <kbd>R</kbd> restart, <kbd>H</kbd> hint.</p>
       <div class="sheet-actions">
@@ -184,6 +225,8 @@
 <script src="js/core.js"></script>
 <script src="js/levels.js"></script>
 <script src="js/migrations.js"></script>
+<script src="js/cloud-config.js"></script>
+<script src="js/cloud.js"></script>
 <script src="js/fakeads.js"></script>
 <script src="js/fakeads-creatives.js"></script>
 <script src="js/audio.js"></script>

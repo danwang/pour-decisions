@@ -45,6 +45,18 @@
   }
 
   // -------------------------------------------------------------- rules ----
+  //
+  // Every rules function takes `rules`: either a number (the classic puzzle,
+  // every tube holds that many units) or an object:
+  //
+  //   K        units per color; a tube is finished when it holds K of one color
+  //   heights  per-tube capacity (tall and short tubes); default K
+  //   only     per-tube color restriction (null = any color)
+  //   locks    [{ tube, key }]: tube is sealed until a tube of color `key` is finished
+  //   limit    move limit (used by analysis and the UI, not by the move rules)
+  //
+  // A finished tube is corked: nothing pours out of it. That makes finishing
+  // permanent, so a lock's state follows from the position alone.
 
   const clone = (tubes) => tubes.map((t) => t.slice());
   const top = (t) => t[t.length - 1];
@@ -63,74 +75,155 @@
     return true;
   }
 
-  const isComplete = (t, cap) => t.length === cap && isMono(t);
-
-  function canPour(tubes, cap, a, b) {
-    if (a === b) return false;
-    const A = tubes[a], B = tubes[b];
-    if (!A || !B || !A.length || B.length >= cap) return false;
-    return !B.length || top(B) === top(A);
+  const plainCache = new Map();
+  const normCache = new WeakMap();
+  /** Normalize rules (number or object) into fast accessors. Cached. */
+  function norm(rules) {
+    if (rules && rules.__norm) return rules;
+    if (typeof rules === 'number') {
+      let n = plainCache.get(rules);
+      if (!n) {
+        n = { __norm: true, K: rules, plain: true, h: () => rules, only: () => -1, locks: null, sig: () => '', spec: rules };
+        plainCache.set(rules, n);
+      }
+      return n;
+    }
+    let n = normCache.get(rules);
+    if (n) return n;
+    const K = rules.K || rules.cap;
+    const heights = rules.heights && rules.heights.length ? rules.heights : null;
+    const only = rules.only && rules.only.some((c) => c != null) ? rules.only : null;
+    const locks = rules.locks && rules.locks.length ? rules.locks : null;
+    const lockKey = new Map();
+    if (locks) for (const l of locks) lockKey.set(l.tube, l.key);
+    const h = heights ? (i) => (heights[i] != null ? heights[i] : K) : () => K;
+    const o = only ? (i) => (only[i] != null ? only[i] : -1) : () => -1;
+    const plain = !heights && !only && !locks;
+    n = {
+      __norm: true, K, plain, h, only: o, locks, lockKey, limit: rules.limit || null, spec: rules,
+      // Tubes with equal signatures are interchangeable; plain tubes sign ''.
+      sig: plain ? () => '' : (i) => {
+        const hh = h(i), oo = o(i), kk = lockKey.has(i) ? lockKey.get(i) : -1;
+        return hh === K && oo < 0 && kk < 0 ? '' : `~${hh}.${oo}.${kk}~`;
+      },
+    };
+    normCache.set(rules, n);
+    return n;
   }
 
-  function pourAmount(tubes, cap, a, b) {
-    if (!canPour(tubes, cap, a, b)) return 0;
-    return Math.min(topRun(tubes[a]), cap - tubes[b].length);
+  const isComplete = (t, rules) => { const K = typeof rules === 'number' ? rules : norm(rules).K; return t.length === K && isMono(t); };
+
+  /** Indices of tubes that are still locked in this position (null when the puzzle has no locks). */
+  function lockedTubes(tubes, rules) {
+    const n = norm(rules);
+    if (!n.locks) return null;
+    const done = new Set();
+    for (const t of tubes) if (t.length === n.K && isMono(t)) done.add(t[0]);
+    const out = new Set();
+    for (const l of n.locks) if (!done.has(l.key)) out.add(l.tube);
+    return out;
+  }
+
+  function canPour(tubes, rules, a, b, locked) {
+    if (a === b) return false;
+    const n = norm(rules);
+    const A = tubes[a], B = tubes[b];
+    if (!A || !B || !A.length || B.length >= n.h(b)) return false;
+    if (A.length === n.K && isMono(A)) return false; // corked
+    const c = top(A);
+    if (B.length && top(B) !== c) return false;
+    const o = n.only(b);
+    if (o >= 0 && o !== c) return false;
+    if (n.locks) {
+      const L = locked || lockedTubes(tubes, n);
+      if (L.has(a) || L.has(b)) return false;
+    }
+    return true;
+  }
+
+  function pourAmount(tubes, rules, a, b) {
+    if (!canPour(tubes, rules, a, b)) return 0;
+    return Math.min(topRun(tubes[a]), norm(rules).h(b) - tubes[b].length);
   }
 
   /** Mutates tubes. Returns the number of units moved (0 if illegal). */
-  function pour(tubes, cap, a, b) {
-    const n = pourAmount(tubes, cap, a, b);
+  function pour(tubes, rules, a, b) {
+    const n = pourAmount(tubes, rules, a, b);
     for (let i = 0; i < n; i++) tubes[b].push(tubes[a].pop());
     return n;
   }
 
-  /** Solved: every tube is empty or full of a single color. */
-  function isSolved(tubes, cap) {
-    for (const t of tubes) if (t.length && !isComplete(t, cap)) return false;
+  /** Pour already known to be legal (solver hot path). */
+  function pourUnchecked(tubes, n, a, b) {
+    const k = Math.min(topRun(tubes[a]), n.h(b) - tubes[b].length);
+    for (let i = 0; i < k; i++) tubes[b].push(tubes[a].pop());
+    return k;
+  }
+
+  /** Solved: every tube is empty or finished (K units of one color). */
+  function isSolved(tubes, rules) {
+    const K = typeof rules === 'number' ? rules : norm(rules).K;
+    for (const t of tubes) if (t.length && !(t.length === K && isMono(t))) return false;
     return true;
   }
 
   /** Every legal move, with no pruning (what the player can do). */
-  function allMoves(tubes, cap) {
+  function allMoves(tubes, rules) {
+    const n = norm(rules);
+    const L = lockedTubes(tubes, n);
     const out = [];
     for (let a = 0; a < tubes.length; a++)
       for (let b = 0; b < tubes.length; b++)
-        if (canPour(tubes, cap, a, b)) out.push([a, b]);
+        if (canPour(tubes, n, a, b, L)) out.push([a, b]);
     return out;
   }
 
   /**
-   * Legal moves minus ones that can never help: pouring out of a finished
-   * tube, pouring a single-color tube into an empty one, and pouring into
-   * more than one empty tube (they are interchangeable).
+   * Legal moves minus ones that can never help: pouring a single-color tube
+   * into an interchangeable empty tube, and choosing between interchangeable
+   * empty tubes (only the first of each kind is tried).
    */
-  function usefulMoves(tubes, cap) {
+  function usefulMoves(tubes, rules) {
+    const n = norm(rules);
+    const L = lockedTubes(tubes, n);
     const out = [];
-    let firstEmpty = -1;
-    for (let i = 0; i < tubes.length; i++) if (!tubes[i].length) { firstEmpty = i; break; }
+    const emptyOk = new Array(tubes.length).fill(false);
+    const seenSig = new Set();
+    for (let i = 0; i < tubes.length; i++) {
+      if (tubes[i].length || (L && L.has(i))) continue;
+      const sg = n.sig(i);
+      if (!seenSig.has(sg)) { seenSig.add(sg); emptyOk[i] = true; }
+    }
     for (let a = 0; a < tubes.length; a++) {
       const A = tubes[a];
-      if (!A.length || isComplete(A, cap)) continue;
+      if (!A.length || (A.length === n.K && isMono(A)) || (L && L.has(a))) continue;
       const c = top(A);
       const mono = topRun(A) === A.length;
       for (let b = 0; b < tubes.length; b++) {
         if (a === b) continue;
         const B = tubes[b];
         if (!B.length) {
-          if (mono || b !== firstEmpty) continue;
-        } else if (B.length >= cap || top(B) !== c) continue;
+          if (!emptyOk[b] || (mono && n.sig(a) === n.sig(b))) continue;
+        } else if (B.length >= n.h(b) || top(B) !== c || (L && L.has(b))) continue;
+        const o = n.only(b);
+        if (o >= 0 && o !== c) continue;
         out.push([a, b]);
       }
     }
     return out;
   }
 
-  /** Tubes are interchangeable, so a state's identity is its sorted tube multiset. */
-  function stateKey(tubes) {
+  /**
+   * A position's identity. Tubes of the same kind are interchangeable, so the
+   * key is the sorted multiset of (kind, contents). Plain tubes have no kind
+   * prefix, so classic puzzles keep exactly their old keys.
+   */
+  function stateKey(tubes, rules) {
+    const n = rules != null ? norm(rules) : null;
     const parts = new Array(tubes.length);
     for (let i = 0; i < tubes.length; i++) {
       const t = tubes[i];
-      let s = '';
+      let s = n && !n.plain ? n.sig(i) : '';
       for (let j = 0; j < t.length; j++) s += String.fromCharCode(48 + t[j]);
       parts[i] = s;
     }
@@ -138,18 +231,41 @@
     return parts.join('|');
   }
 
+  /** Plain JSON-able rules for storage and workers. A number when classic. */
+  function rulesSpec(rules) {
+    const n = norm(rules);
+    if (n.plain && !n.limit) return n.K;
+    const out = { K: n.K };
+    const s = n.spec;
+    if (s.heights && s.heights.length) out.heights = s.heights.slice();
+    if (s.only && s.only.some((c) => c != null)) out.only = s.only.slice();
+    if (s.locks && s.locks.length) out.locks = s.locks.map((l) => ({ tube: l.tube, key: l.key }));
+    if (n.limit) out.limit = n.limit;
+    return out;
+  }
+
   /**
    * A stable identity for a puzzle's content, used to key saved progress.
    * Colors are relabeled by first appearance and tubes are sorted, so the
    * same deal gets the same id whatever its position, palette or tube order.
+   * Rules are part of the identity (a move limit makes a different puzzle),
+   * but classic puzzles hash exactly as they always have.
    */
-  function puzzleId(tubes, cap) {
+  function puzzleId(tubes, rules) {
+    const n = norm(rules);
     const map = new Map();
-    const relabeled = tubes.map((t) => t.map((c) => {
-      if (!map.has(c)) map.set(c, map.size);
-      return map.get(c);
-    }));
-    const key = cap + ':' + stateKey(relabeled);
+    const relabel = (c) => { if (!map.has(c)) map.set(c, map.size); return map.get(c); };
+    const relabeled = tubes.map((t) => t.map(relabel));
+    let key;
+    if (n.plain) {
+      key = n.K + ':' + stateKey(relabeled);
+    } else {
+      const s = n.spec;
+      const r = { K: n.K, heights: s.heights, only: s.only && s.only.map((c) => (c == null ? null : relabel(c))),
+        locks: s.locks && s.locks.map((l) => ({ tube: l.tube, key: relabel(l.key) })) };
+      key = n.K + ':' + stateKey(relabeled, r);
+    }
+    if (n.limit) key += '#limit' + n.limit;
     return hashString(key).toString(36) + hashString('~' + key).toString(36);
   }
 
@@ -202,13 +318,15 @@
   /**
    * A* over canonical states. The heuristic is (color runs − colors): a pour
    * can merge at most one run into another, and no pour ever splits a run,
-   * so it never overestimates. With weight 1 the first solution is optimal.
+   * so it never overestimates. Tube restrictions and locks only remove
+   * moves, so it stays admissible. With weight 1 the first solution is optimal.
    *
    * Returns { solved, moves, expanded, optimal, exhausted }.
    * `exhausted` means the whole reachable space was searched: proof of no solution.
    */
-  function solve(start, cap, opts) {
+  function solve(start, rules, opts) {
     opts = opts || {};
+    const R = norm(rules);
     const limit = opts.limit || 250000;
     const w = opts.weight || 1;
     const nColors = colorCount(start);
@@ -218,24 +336,24 @@
     root.f = w * h(root.tubes);
     const open = new Heap();
     open.push(root);
-    const best = new Map([[stateKey(root.tubes), 0]]);
+    const best = new Map([[stateKey(root.tubes, R), 0]]);
     let expanded = 0;
 
     while (open.size) {
       const node = open.pop();
-      const k = stateKey(node.tubes);
+      const k = stateKey(node.tubes, R);
       if (best.get(k) < node.g) continue; // stale entry
-      if (isSolved(node.tubes, cap)) {
+      if (isSolved(node.tubes, R)) {
         const moves = [];
         for (let n = node; n.parent; n = n.parent) moves.push(n.move);
         moves.reverse();
         return { solved: true, moves, expanded, optimal: w === 1, exhausted: false };
       }
       if (++expanded > limit) return { solved: false, moves: null, expanded, optimal: false, exhausted: false };
-      for (const [a, b] of usefulMoves(node.tubes, cap)) {
+      for (const [a, b] of usefulMoves(node.tubes, R)) {
         const t = clone(node.tubes);
-        pour(t, cap, a, b);
-        const ck = stateKey(t);
+        pourUnchecked(t, R, a, b);
+        const ck = stateKey(t, R);
         const g = node.g + 1;
         const prev = best.get(ck);
         if (prev !== undefined && prev <= g) continue;
@@ -247,14 +365,14 @@
   }
 
   /** Fast search first; exact A* only when the state space allows it. */
-  function bestSolution(tubes, cap, exactLimit) {
-    const quick = solve(tubes, cap, { weight: 3, limit: 60000 });
+  function bestSolution(tubes, rules, exactLimit) {
+    const quick = solve(tubes, rules, { weight: 3, limit: 60000 });
     if (!quick.solved) {
       if (quick.exhausted) return quick;
-      const deep = solve(tubes, cap, { weight: 1.5, limit: 300000 });
+      const deep = solve(tubes, rules, { weight: 1.5, limit: 300000 });
       return deep;
     }
-    const exact = solve(tubes, cap, { weight: 1, limit: exactLimit || 150000 });
+    const exact = solve(tubes, rules, { weight: 1, limit: exactLimit || 150000 });
     if (exact.solved && exact.moves.length <= quick.moves.length) return exact;
     return quick;
   }
@@ -266,18 +384,18 @@
    * finishing tubes look good; spending an empty tube looks costly.
    * The player sees one move ahead, like most people do.
    */
-  function moveAppeal(tubes, cap, a, b) {
+  function moveAppeal(tubes, R, a, b) {
     const A = tubes[a], B = tubes[b];
     const run = topRun(A);
-    const n = Math.min(run, cap - B.length);
+    const n = Math.min(run, R.h(b) - B.length);
     let s = 0;
     if (B.length) {
       s += 2;
       if (n === run) s += 1; // whole run moves, source reveals a new color
-      if (B.length + n === cap && isMono(B)) s += 3; // completes a tube
+      if (B.length + n === R.K && isMono(B)) s += 3; // completes a tube
       if (isMono(B)) s += 0.5;
     } else {
-      s -= 1.5; // using up free space
+      s -= R.only(b) >= 0 ? 0.5 : 1.5; // using up free space (a reserved tube costs less)
       if (n === A.length) s -= 2;
     }
     if (n === A.length) s += 0.75; // frees a tube
@@ -287,23 +405,25 @@
 
   /**
    * One play-through by a noisy greedy player with no undo. It never repeats
-   * a position; it fails when it runs out of fresh moves.
+   * a position; it fails when it runs out of fresh moves (or of moves allowed).
    */
-  function rollout(start, cap, rng, temperature) {
+  function rollout(start, rules, rng, temperature, maxDepth) {
+    const R = norm(rules);
     const T = temperature || 0.9;
     const tubes = clone(start);
-    const seen = new Set([stateKey(tubes)]);
+    const seen = new Set([stateKey(tubes, R)]);
     let moves = 0;
-    const maxMoves = 400;
-    while (moves < maxMoves) {
-      if (isSolved(tubes, cap)) return { solved: true, moves };
+    const maxMoves = Math.min(400, maxDepth || 400);
+    while (moves <= maxMoves) {
+      if (isSolved(tubes, R)) return { solved: true, moves };
+      if (moves === maxMoves) break;
       const options = [];
-      for (const [a, b] of usefulMoves(tubes, cap)) {
+      for (const [a, b] of usefulMoves(tubes, R)) {
         const t = clone(tubes);
-        pour(t, cap, a, b);
-        const k = stateKey(t);
+        pourUnchecked(t, R, a, b);
+        const k = stateKey(t, R);
         if (seen.has(k)) continue;
-        options.push({ a, b, k, s: moveAppeal(tubes, cap, a, b) });
+        options.push({ a, b, k, s: moveAppeal(tubes, R, a, b) });
       }
       if (!options.length) return { solved: false, moves };
       let max = -Infinity;
@@ -312,7 +432,7 @@
       for (const o of options) { o.p = Math.exp((o.s - max) / T); sum += o.p; }
       let r = rng() * sum, pick = options[options.length - 1];
       for (const o of options) { r -= o.p; if (r <= 0) { pick = o; break; } }
-      pour(tubes, cap, pick.a, pick.b);
+      pourUnchecked(tubes, R, pick.a, pick.b);
       seen.add(pick.k);
       moves++;
     }
@@ -324,20 +444,24 @@
    * they run out of fresh moves they step back and try their next idea.
    * Returns the total moves spent, undos included (a depth-first search whose
    * move order is the player's preference, perturbed with Gumbel noise).
+   * With a move limit, lines longer than the limit count as dead ends.
    */
-  function explore(start, cap, rng, temperature, budget) {
+  function explore(start, rules, rng, temperature, budget, maxDepth) {
+    const R = norm(rules);
     const T = temperature || 0.9;
     const maxEffort = budget || 4000;
-    const seen = new Set([stateKey(start)]);
-    const frame = (tubes) => {
-      if (isSolved(tubes, cap)) return { tubes, opts: null, i: 0 };
-      const opts = usefulMoves(tubes, cap).map(([a, b]) => ({
-        a, b, r: moveAppeal(tubes, cap, a, b) / T - Math.log(-Math.log(rng() || 1e-12)),
+    const depthCap = maxDepth || Infinity;
+    // Position → shallowest depth reached. Without a limit, any repeat is skipped.
+    const seen = new Map([[stateKey(start, R), 0]]);
+    const frame = (tubes, depth) => {
+      if (isSolved(tubes, R)) return { tubes, opts: null, i: 0 };
+      const opts = depth >= depthCap ? [] : usefulMoves(tubes, R).map(([a, b]) => ({
+        a, b, r: moveAppeal(tubes, R, a, b) / T - Math.log(-Math.log(rng() || 1e-12)),
       }));
       opts.sort((x, y) => y.r - x.r);
       return { tubes, opts, i: 0 };
     };
-    const stack = [frame(clone(start))];
+    const stack = [frame(clone(start), 0)];
     let effort = 0;
     while (stack.length && effort < maxEffort) {
       const f = stack[stack.length - 1];
@@ -346,15 +470,17 @@
       while (f.i < f.opts.length) {
         const o = f.opts[f.i++];
         const t = clone(f.tubes);
-        pour(t, cap, o.a, o.b);
-        const k = stateKey(t);
-        if (seen.has(k)) continue;
-        seen.add(k);
+        pourUnchecked(t, R, o.a, o.b);
+        const k = stateKey(t, R);
+        const depth = stack.length;
+        const d = seen.get(k);
+        if (d !== undefined && (depthCap === Infinity || d <= depth)) continue;
+        seen.set(k, depth);
         next = t;
         break;
       }
       effort++; // a pour forward, or an undo back
-      if (next) stack.push(frame(next));
+      if (next) stack.push(frame(next, stack.length));
       else stack.pop();
     }
     return { solved: false, effort: maxEffort };
@@ -364,29 +490,33 @@
    * Difficulty analysis.
    *
    *  par      shortest (or best found) solution length
+   *  limit    move limit, when opts.moveLimit is set (a number, or a function of par)
    *  success  fraction of simulated casual players who win on the first try, no undo
    *  effort   mean moves (undos included) a casual player who backtracks spends
    *  trick    effort / par: how misleading the position is, independent of size
    *  score    log2(effort): the difficulty number. +1 means twice the work.
    */
-  function analyze(tubes, cap, opts) {
+  function analyze(tubes, rules, opts) {
     opts = opts || {};
-    const rng = opts.rng || mulberry32(hashString(stateKey(tubes)));
-    const sol = opts.solution || bestSolution(tubes, cap, opts.exactLimit);
+    const R = norm(rules);
+    const rng = opts.rng || mulberry32(hashString(stateKey(tubes, R)));
+    const sol = opts.solution || bestSolution(tubes, R, opts.exactLimit);
     if (!sol.solved) return null;
-    const R = opts.rollouts || 32;
+    const par = sol.moves.length;
+    const limit = typeof opts.moveLimit === 'function' ? opts.moveLimit(par) : opts.moveLimit || null;
+    const Rn = opts.rollouts || 32;
     let wins = 0;
-    for (let i = 0; i < R; i++) if (rollout(tubes, cap, rng, opts.temperature).solved) wins++;
+    for (let i = 0; i < Rn; i++) if (rollout(tubes, R, rng, opts.temperature, limit).solved) wins++;
     const E = opts.explorers || 16;
     let effort = 0;
-    for (let i = 0; i < E; i++) effort += explore(tubes, cap, rng, opts.temperature).effort;
+    for (let i = 0; i < E; i++) effort += explore(tubes, R, rng, opts.temperature, undefined, limit).effort;
     effort /= E;
-    const par = sol.moves.length;
     return {
       par,
+      limit,
       optimal: sol.optimal,
       solution: sol.moves,
-      success: wins / R,
+      success: wins / Rn,
       effort,
       trick: effort / Math.max(1, par),
       score: Math.log2(Math.max(1, effort)),
@@ -395,7 +525,7 @@
 
   // ---------------------------------------------------------- generator ----
 
-  /** A shuffled puzzle. No tube starts finished. */
+  /** A shuffled classic puzzle. No tube starts finished. */
   function randomPuzzle(rng, spec) {
     const { colors, cap, empties } = spec;
     const palette = spec.palette || [...Array(colors).keys()];
@@ -414,6 +544,72 @@
     throw new Error('could not build puzzle');
   }
 
+  /**
+   * A deal with optional mechanics. Returns { tubes, rules }.
+   *   spec.heights  'mixed': filled and spare tubes get varied heights
+   *   spec.only     number of extra empty tubes reserved for one color
+   *   spec.locks    number of filled tubes sealed until another color is finished
+   *   spec.limit    true: a move limit (set from par by generate)
+   * Without mechanics this is randomPuzzle, with the same random draws.
+   */
+  function randomDeal(rng, spec) {
+    const K = spec.cap;
+    if (!spec.heights && !spec.only && !spec.locks) return { tubes: randomPuzzle(rng, spec), rules: K };
+    const { colors, empties } = spec;
+    const palette = spec.palette || [...Array(colors).keys()];
+    for (let tries = 0; tries < 300; tries++) {
+      // Heights of the filled tubes: trade capacity between pairs so the total stays colors × K.
+      const H = new Array(colors).fill(K);
+      if (spec.heights) {
+        const swaps = Math.max(2, Math.round(colors * 0.5));
+        for (let s = 0; s < swaps; s++) {
+          const i = rng.int(colors), j = rng.int(colors);
+          const d = rng() < 0.3 ? 2 : 1;
+          if (i !== j && H[i] + d <= K + 2 && H[j] - d >= 2) { H[i] += d; H[j] -= d; }
+        }
+      }
+      const pool = [];
+      for (let c = 0; c < colors; c++) for (let k = 0; k < K; k++) pool.push(palette[c]);
+      shuffle(pool, rng);
+      const tubes = [];
+      let at = 0;
+      for (let i = 0; i < colors; i++) { tubes.push(pool.slice(at, at + H[i])); at += H[i]; }
+      if (tubes.some((t) => t.length >= 2 && isMono(t))) continue;
+      if (tubes.filter((t) => topRun(t) >= K - 1).length > 1) continue;
+      const heights = H.slice();
+      for (let e = 0; e < empties; e++) {
+        tubes.push([]);
+        heights.push(spec.heights ? [K - 1, K, K + 1, K + 2][rng.int(4)] : K);
+      }
+      if (spec.heights && !heights.some((h, i) => i >= colors && h >= K)) heights[colors] = K; // keep one usable spare
+      const only = new Array(tubes.length).fill(null);
+      if (spec.only) {
+        const picks = shuffle(palette.slice(0, colors), rng).slice(0, spec.only);
+        for (const c of picks) { tubes.push([]); heights.push(K); only.push(c); }
+      }
+      const locks = [];
+      if (spec.locks) {
+        const candidates = shuffle([...Array(colors).keys()], rng);
+        for (const ti of candidates) {
+          if (locks.length >= spec.locks) break;
+          const inside = new Set(tubes[ti]);
+          const keys = palette.slice(0, colors).filter((c) => !inside.has(c) && !locks.some((l) => l.key === c));
+          if (keys.length) locks.push({ tube: ti, key: keys[rng.int(keys.length)] });
+        }
+        if (locks.length < spec.locks) continue;
+      }
+      const rules = { K };
+      if (spec.heights) rules.heights = heights;
+      if (spec.only) rules.only = only;
+      if (locks.length) rules.locks = locks;
+      return { tubes, rules };
+    }
+    throw new Error('could not build puzzle');
+  }
+
+  /** Move limit for limit levels: room for a few non-optimal moves. */
+  const moveLimitFor = (par) => Math.ceil(par * 1.25) + 1;
+
   /** Choose which palette colors a level uses: distinct first, then the rest. */
   function pickPalette(rng, n, paletteSize) {
     const idx = shuffle([...Array(paletteSize).keys()], rng);
@@ -423,7 +619,8 @@
   /**
    * Build `candidates` solvable puzzles for a spec, rank them by difficulty
    * score and take the one at `percentile` (0 = easiest of the batch,
-   * 1 = hardest). Optional `target` picks the candidate closest to that score.
+   * 1 = hardest). A `target` picks the candidate closest to that score.
+   * Mechanics in the spec (heights, only, locks, limit) are dealt by randomDeal.
    */
   function generate(spec, seed, opts) {
     opts = opts || {};
@@ -432,18 +629,19 @@
     const paletteSize = opts.paletteSize || 14;
     const list = [];
     let guard = 0;
-    while (list.length < n && guard++ < n * 6) {
+    while (list.length < n && guard++ < n * 8) {
       const palette = pickPalette(rng, spec.colors, paletteSize);
-      const tubes = randomPuzzle(rng, { ...spec, palette });
-      const a = analyze(tubes, spec.cap, {
+      const deal = randomDeal(rng, { ...spec, palette });
+      const a = analyze(deal.tubes, deal.rules, {
         rng: mulberry32(rng.int(1 << 30)),
         rollouts: opts.rollouts,
         explorers: opts.explorers,
         exactLimit: opts.exactLimit,
+        moveLimit: spec.limit ? moveLimitFor : undefined,
       });
       if (!a) continue;
       if (spec.minPar && a.par < spec.minPar) continue;
-      list.push({ tubes, analysis: a });
+      list.push({ deal, analysis: a });
     }
     if (!list.length) throw new Error('no solvable candidates');
     list.sort((x, y) => x.analysis.score - y.analysis.score);
@@ -456,10 +654,21 @@
       pick = list[Math.min(list.length - 1, Math.round(p * (list.length - 1)))];
     }
     const an = pick.analysis;
+    let rules = pick.deal.rules;
+    // Candidates are screened with a small exact-search budget. Spend a big one on
+    // the winner, so "fewest moves" is the true minimum and says so when proven.
+    let par = an.par, optimal = an.optimal;
+    if (!optimal && opts.finalExactLimit) {
+      const exact = solve(pick.deal.tubes, rules, { weight: 1, limit: opts.finalExactLimit });
+      if (exact.solved) { par = Math.min(par, exact.moves.length); optimal = true; }
+    }
+    if (an.limit) rules = Object.assign(typeof rules === 'number' ? { K: rules } : { ...rules }, { limit: an.limit });
     return {
       cap: spec.cap,
-      tubes: pick.tubes,
-      par: an.par,
+      tubes: pick.deal.tubes,
+      rules: rulesSpec(rules),
+      par,
+      optimal,
       score: +an.score.toFixed(2),
       success: +an.success.toFixed(2),
       spread: [+list[0].analysis.score.toFixed(2), +list[list.length - 1].analysis.score.toFixed(2)],
@@ -542,6 +751,26 @@
     return { colors, cap, empties: 2, target: +target.toFixed(2), kind: beat.kind };
   }
 
+  /**
+   * Average score each mechanic adds at the same board size
+   * (node tools/calibrate-mechanics.js). Combinations are treated as additive.
+   */
+  const MECHANIC_OFFSET = {"heights":0.3,"only":0.26,"locks":0.5,"limit":0.62};
+  const MECHANIC_SPEC = {
+    heights: { heights: 'mixed' },
+    only: { only: 1, empties: 1 },
+    locks: { locks: 1 },
+    limit: { limit: true },
+  };
+
+  /** A generation spec for a mechanic level aimed at `target`. */
+  function mechanicSpec(mechanics, target, minColors, kind) {
+    const extra = Object.assign({}, ...mechanics.map((m) => MECHANIC_SPEC[m]));
+    const offset = mechanics.reduce((a, m) => a + (MECHANIC_OFFSET[m] || 0), 0);
+    const colors = sizeForTarget(target - offset, 4, minColors, 12);
+    return Object.assign({ colors, cap: 4, empties: 2, target: +target.toFixed(2), kind: kind || 'normal' }, extra);
+  }
+
   /** Endless tiers: named stops on the same score scale. */
   const TIERS = [
     { name: 'Relaxed', target: 3.7 },
@@ -579,21 +808,25 @@
   const tasks = {
     generate({ spec, seed, candidates }) {
       // Lighter analysis than the offline build: fast enough to run between puzzles.
-      return generate(spec, seed, { candidates: candidates || 14, rollouts: 16, explorers: 10, exactLimit: 60000 });
+      return generate(spec, seed, { candidates: candidates || 14, rollouts: 16, explorers: 10, exactLimit: 60000, finalExactLimit: 250000 });
     },
-    /** Next move toward a solution, or proof that none exists from here. */
-    hint({ tubes, cap }) {
+    /**
+     * Next move toward a solution, or proof that none exists from here.
+     * With `remaining` (moves left under a limit), a solution that is too long counts as none.
+     */
+    hint({ tubes, cap, remaining }) {
       // Optimal when the search is small, otherwise a fast near-optimal path.
-      let r = solve(tubes, cap, { weight: 1, limit: 6000 });
+      let r = solve(tubes, cap, { weight: 1, limit: remaining != null ? 40000 : 6000 });
       if (!r.solved && !r.exhausted) r = solve(tubes, cap, { weight: 2, limit: 250000 });
+      if (r.solved && remaining != null && r.moves.length > remaining) return { status: 'over', left: r.moves.length };
       if (r.solved) return { status: r.moves.length ? 'move' : 'solved', move: r.moves[0], left: r.moves.length };
       return { status: r.exhausted ? 'dead' : 'unknown' };
     },
-    /** Given earlier positions (most recent first), the first one that can still be solved. */
-    rescue({ states, cap }) {
+    /** Given earlier positions (most recent first), the first one that can still be solved (within its remaining moves). */
+    rescue({ states, cap, remaining }) {
       for (let i = 0; i < states.length; i++) {
-        const r = solve(states[i], cap, { weight: 3, limit: 60000 });
-        if (r.solved) return { back: i + 1 };
+        const r = solve(states[i], cap, { weight: remaining ? 1.5 : 3, limit: 60000 });
+        if (r.solved && (!remaining || r.moves.length <= remaining[i])) return { back: i + 1 };
       }
       return { back: states.length };
     },
@@ -604,8 +837,9 @@
     mulberry32, hashString, shuffle,
     clone, top, topRun, isMono, isComplete, canPour, pourAmount, pour, isSolved,
     allMoves, usefulMoves, stateKey, puzzleId, countRuns, colorCount,
-    solve, bestSolution, rollout, analyze,
-    randomPuzzle, generate, campaignSpec, campaignTarget, tierSpec, specForTarget, sizeForTarget, autoTarget,
+    norm, rulesSpec, lockedTubes, moveLimitFor,
+    solve, bestSolution, rollout, explore, analyze,
+    randomPuzzle, randomDeal, generate, mechanicSpec, MECHANIC_OFFSET, campaignSpec, campaignTarget, tierSpec, specForTarget, sizeForTarget, autoTarget,
     TIERS, SIZE_TABLE, TOTAL_LEVELS, rating,
   };
 });

@@ -80,11 +80,12 @@
     return Math.abs(area) / 2;
   }
 
+  /** Geometry for a tube holding `cap` units, with unit height `u` (shared by every tube on a board). */
   class Geo {
-    constructor(w, cap) {
+    constructor(w, cap, u) {
       this.w = w;
       this.cap = cap;
-      this.u = w * (cap >= 5 ? 0.84 : 0.92);
+      this.u = u || w * (cap >= 5 ? 0.84 : 0.92);
       this.neck = this.u * 0.6;
       this.H = cap * this.u + this.neck;
       this.wall = Math.max(1.6, w * 0.075);
@@ -172,6 +173,11 @@
       this.enter = 1;
       this.enterDelay = 0;
       this.fade = 1;
+      this.cap = 4; // units this tube holds
+      this.only = -1; // color this tube is reserved for
+      this.lockKey = -1; // color whose finished tube opens this one
+      this.locked = false;
+      this.lockVis = 0; // 1 = padlock fully shown
     }
     get busy() { return !!(this.lockSrc || this.lockDst); }
   }
@@ -202,9 +208,10 @@
 
     // ---- setup
 
-    setPuzzle(tubes, cap, animateIn) {
-      this.cap = cap;
-      this.tubes = tubes.map((t, i) => new Tube(i, t));
+    /** rules: units per color (number) or { K, heights, only, locks } (see SortCore). */
+    setPuzzle(tubes, rules, animateIn) {
+      this._setRules(rules);
+      this.tubes = tubes.map((t, i) => this._makeTube(i, t));
       this.anims = [];
       this.queue = [];
       this.streams = [];
@@ -217,10 +224,45 @@
         if (this._isComplete(t)) { t.corked = true; t.cork = 1; }
         if (animateIn && !this.opts.reducedMotion) { t.enter = 0; t.enterDelay = 40 * t.i; }
       }
+      this._refreshLocks(true);
+    }
+
+    _setRules(rules) {
+      const r = typeof rules === 'number' ? { K: rules } : rules || { K: 4 };
+      this.K = r.K || r.cap || 4;
+      this.cap = this.K;
+      this.heights = r.heights || [];
+      this.onlyFor = r.only || [];
+      this.lockKeys = new Map((r.locks || []).map((l) => [l.tube, l.key]));
+    }
+
+    _makeTube(i, contents) {
+      const t = new Tube(i, contents);
+      t.cap = this.heights[i] != null ? this.heights[i] : this.K;
+      t.only = this.onlyFor[i] != null ? this.onlyFor[i] : -1;
+      t.lockKey = this.lockKeys.has(i) ? this.lockKeys.get(i) : -1;
+      t.locked = t.lockKey >= 0;
+      t.lockVis = t.locked ? 1 : 0;
+      return t;
+    }
+
+    /** A lock opens while a finished (corked) tube of its key color exists. */
+    _refreshLocks(silent) {
+      if (!this.lockKeys.size) return;
+      const done = new Set(this.tubes.filter((t) => t.corked && t.layers.length).map((t) => t.layers[0].c));
+      for (const t of this.tubes) {
+        if (t.lockKey < 0) continue;
+        const locked = !done.has(t.lockKey);
+        if (locked === t.locked) continue;
+        t.locked = locked;
+        if (silent || this.opts.reducedMotion) t.lockVis = locked ? 1 : 0;
+        else if (!locked) { this.onEvent('unlock', { i: t.i, c: t.lockKey }); this._sparkle(t, PALETTE[t.lockKey]); }
+      }
     }
 
     addTube() {
       const t = new Tube(this.tubes.length, []);
+      t.cap = this.K;
       this.tubes.push(t);
       this.layout(false);
       t.pos = { x: t.home.x, y: t.home.y };
@@ -240,11 +282,12 @@
     }
 
     layout(snap) {
-      const n = this.tubes.length, cap = this.cap;
+      const n = this.tubes.length, cap = this.K;
       if (!n) return;
       const R = this.region;
       const uRatio = cap >= 5 ? 0.84 : 0.92;
-      const tubeH = (cap + 0.6) * uRatio; // in units of w
+      const maxCap = Math.max(...this.tubes.map((t) => t.cap));
+      const tubeH = (maxCap + 0.6) * uRatio; // in units of w
       const options = [];
       for (let rows = 1; rows <= 4; rows++) {
         const perRow = Math.ceil(n / rows);
@@ -259,11 +302,14 @@
       const best = options.find((o) => o.w >= maxW * 0.85 && o.w >= 36) || options.find((o) => o.w === maxW);
       const { rows } = best;
       const w = Math.floor(best.w);
-      this.geo = new Geo(w, cap);
-      const g = this.geo;
+      // One unit height for every tube, so equal volumes look equal.
+      this._geos = new Map();
+      this.geo = this.geoFor(cap, w, w * uRatio);
+      for (const t of this.tubes) t.geo = this.geoFor(t.cap);
+      const tallest = this.geoFor(maxCap);
       const rowGap = rows > 1 ? 0.8 * w : 0;
       const liftSpace = 0.7 * w;
-      const rowH = g.H + liftSpace;
+      const rowH = tallest.H + liftSpace;
       const totalH = rows * rowH + (rows - 1) * rowGap;
       const y0 = R.y + Math.max(0, (R.h - totalH) / 2) + liftSpace;
       const base = Math.floor(n / rows), extra = n % rows;
@@ -276,13 +322,21 @@
         const x0 = R.x + (R.w - cw * count) / 2;
         for (let k = 0; k < count; k++, idx++) {
           const t = this.tubes[idx];
-          t.home = { x: x0 + cw * (k + 0.5) - w / 2, y: y0 + r * (rowH + rowGap) };
+          // Tubes stand on a common base line, like a rack.
+          t.home = { x: x0 + cw * (k + 0.5) - w / 2, y: y0 + r * (rowH + rowGap) + (tallest.H - t.geo.H) };
           t.cellW = cw;
           t.row = r;
           if (snap || !t.pos) t.pos = { x: t.home.x, y: t.home.y };
         }
       }
       this.rowGap = rowGap;
+    }
+
+    geoFor(cap, w, u) {
+      if (w) this._base = { w, u };
+      let g = this._geos.get(cap);
+      if (!g) { g = new Geo(this._base.w, cap, this._base.u); this._geos.set(cap, g); }
+      return g;
     }
 
     // ---- input
@@ -294,7 +348,7 @@
       let best = -1, bestD = Infinity;
       for (const t of this.tubes) {
         const cx = t.home.x + g.w / 2;
-        const top = t.home.y - g.w * 0.8, bottom = t.home.y + g.H + Math.max(g.w * 0.3, this.rowGap * 0.5);
+        const top = t.home.y - g.w * 0.8, bottom = t.home.y + t.geo.H + Math.max(g.w * 0.3, this.rowGap * 0.5);
         const half = t.cellW / 2;
         if (x >= cx - half && x <= cx + half && y >= top && y <= bottom) return t.i;
         const dx = Math.max(0, Math.abs(x - cx) - half);
@@ -353,11 +407,12 @@
       this.finishAll();
       while (this.tubes.length > tubes.length) this.tubes.pop();
       tubes.forEach((arr, i) => {
-        const t = this.tubes[i] || (this.tubes[i] = new Tube(i, []));
+        const t = this.tubes[i] || (this.tubes[i] = this._makeTube(i, []));
         t.layers = layersFrom(arr);
         t.corked = this._isComplete(t);
         t.cork = t.corked ? 1 : 0;
       });
+      this._refreshLocks(true);
       this.layout(false);
     }
 
@@ -399,8 +454,8 @@
         an.kx = kx;
         an.P = P;
         an.V0 = V0;
-        an.th0 = Math.max(0.7, g.theta(V0));
-        an.th1 = Math.min(1.53, Math.max(an.th0 + 0.05, g.theta(V0 - m.n)));
+        an.th0 = Math.max(0.7, A.geo.theta(V0));
+        an.th1 = Math.min(1.53, Math.max(an.th0 + 0.05, A.geo.theta(V0 - m.n)));
         const from = A.pos, lift = A.lift * g.w * 0.45;
         an.start = { cx: from.x + kx, cy: from.y - lift };
         an.fly = 250 / speed;
@@ -409,7 +464,7 @@
         an.back = 240 / speed;
         an.dur = an.fly + an.pourDur + an.lag + an.back;
         A.pose = { cx: an.start.cx, cy: an.start.cy, a: 0, kx };
-        this.onEvent('pourStart', { a: m.a, b: m.b, n: m.n, c: m.c, delay: an.fly, dur: an.pourDur, fillFrom: volume(B.layers), cap: this.cap });
+        this.onEvent('pourStart', { a: m.a, b: m.b, n: m.n, c: m.c, delay: an.fly, dur: an.pourDur, fillFrom: volume(B.layers), cap: B.cap });
       }
       A.liftTarget = 0;
       if (this.selected === m.a) this.selected = -1;
@@ -425,20 +480,20 @@
     _placePour(A, B) {
       const g = this.geo, bx = B.home.x + g.w / 2;
       const natural = A.home.x <= B.home.x ? 1 : -1;
-      const reach = g.H * 0.85;
+      const reach = A.geo.H * 0.85;
       // Horizontal and vertical extent of a tilted tube hanging off pivot P.
       const footprint = (P, d) => ({
         x0: d > 0 ? P.x - reach : P.x - g.w * 0.4,
         x1: d > 0 ? P.x + g.w * 0.4 : P.x + reach,
         y0: P.y - g.w,
-        y1: P.y + g.H * 0.75,
+        y1: P.y + A.geo.H * 0.75,
       });
       const others = this.anims
         .filter((an) => an.type === 'pour' && !an.srcDone && an.P)
         .map((an) => footprint(an.P, an.dir));
       let best = null;
       // One step up clears a pour at the normal height completely.
-      const step = g.H * 0.75 + g.w * 1.1;
+      const step = A.geo.H * 0.75 + g.w * 1.1;
       for (let level = 0; level < 2; level++) {
         for (const d of [natural, -natural]) {
           const P = { x: bx - d * g.w * 0.12, y: B.home.y - g.w * 1.15 - level * step };
@@ -481,7 +536,7 @@
         const p = clamp(tp / an.pourDur, 0, 1);
         const drained = an.n * p;
         A.layers = withTop(an.srcBase, an.c, an.n - drained);
-        const th = Math.max(an.th0, Math.min(an.th1, g.theta(an.V0 - drained)));
+        const th = Math.max(an.th0, Math.min(an.th1, A.geo.theta(an.V0 - drained)));
         A.pose = { cx: an.P.x, cy: an.P.y, a: an.dir * th, kx: an.kx };
         // Stream.
         an.stream = an.stream || { c: an.c, x: an.P.x, y0: an.P.y, head: an.P.y, tail: an.P.y, dst: an.b };
@@ -551,15 +606,17 @@
       } else if (!done && t.corked) {
         t.corked = false;
         t.cork = 0;
-      }
+      } else return;
+      this._refreshLocks(silent);
     }
 
+    /** Finished: all K units of one color (tall tubes can hold more, short ones never finish). */
     _isComplete(t) {
-      return t.layers.length === 1 && Math.abs(t.layers[0].v - this.cap) < 1e-3;
+      return t.layers.length === 1 && Math.abs(t.layers[0].v - this.K) < 1e-3;
     }
 
     _surfaceY(t) {
-      const g = this.geo;
+      const g = t.geo || this.geo;
       return t.home.y + g.H - volume(t.layers) * g.u;
     }
 
@@ -576,14 +633,14 @@
       }
     }
 
-    _sparkle(t) {
+    _sparkle(t, color) {
       const g = this.geo, cx = t.home.x + g.w / 2, cy = t.home.y + g.u * 0.2;
       for (let k = 0; k < 16; k++) {
         const ang = (Math.PI * 2 * k) / 16 + Math.random() * 0.3;
         const sp = 0.08 + Math.random() * 0.14;
         this.particles.push({
           type: 'spark', x: cx, y: cy, vx: Math.cos(ang) * sp, vy: Math.sin(ang) * sp - 0.08,
-          life: 0, max: 500 + Math.random() * 300, color: k % 3 ? PALETTE[t.layers[0].c] : '#FFFFFF', size: g.w * 0.07,
+          life: 0, max: 500 + Math.random() * 300, color: k % 3 ? color || PALETTE[t.layers[0].c] : '#FFFFFF', size: g.w * 0.07,
         });
       }
     }
@@ -646,6 +703,10 @@
         t.wobPhase += dt / 60;
         if (t.cork > 0 && t.cork < 1) t.cork = Math.min(1, t.cork + dt / 380);
         if (t.glow > 0) t.glow = Math.max(0, t.glow - dt / 900);
+        if (t.lockKey >= 0) {
+          const target = t.locked ? 1 : 0;
+          if (t.lockVis !== target) t.lockVis = target > t.lockVis ? Math.min(1, t.lockVis + dt / 250) : Math.max(0, t.lockVis - dt / 520);
+        }
         if (t.enter < 1) {
           if (t.enterDelay > 0) t.enterDelay -= dt;
           else t.enter = Math.min(1, t.enter + dt / 380);
@@ -701,8 +762,9 @@
       };
     }
 
-    _tubePath(ctx) {
-      const g = this.geo, w = g.w, H = g.H, r = w / 2;
+    _tubePath(ctx, g) {
+      g = g || this.geo;
+      const w = g.w, H = g.H, r = w / 2;
       ctx.beginPath();
       ctx.moveTo(0, -1);
       ctx.lineTo(0, H - r);
@@ -711,7 +773,7 @@
     }
 
     _drawTube(t, now) {
-      const ctx = this.ctx, g = this.geo, dpr = this.dpr, w = g.w, H = g.H;
+      const ctx = this.ctx, g = t.geo || this.geo, dpr = this.dpr, w = g.w, H = g.H;
       const P = this._poseOf(t);
       const alpha = t.enter < 1 ? clamp(t.enter * 1.6, 0, 1) : 1;
       const setLocal = () => {
@@ -729,21 +791,21 @@
         ctx.save();
         ctx.shadowColor = t.glowColor;
         ctx.shadowBlur = 30 * t.glow * dpr;
-        this._tubePath(ctx); ctx.closePath();
+        this._tubePath(ctx, g); ctx.closePath();
         ctx.fillStyle = rgba(t.glowColor, 0.35 * t.glow);
         ctx.fill();
         ctx.restore();
       }
 
-      // Glass body.
-      this._tubePath(ctx); ctx.closePath();
-      ctx.fillStyle = 'rgba(170,190,255,0.075)';
+      // Glass body. A reserved tube is tinted with its color.
+      this._tubePath(ctx, g); ctx.closePath();
+      ctx.fillStyle = t.only >= 0 ? rgba(PALETTE[t.only], 0.16) : 'rgba(170,190,255,0.075)';
       ctx.fill();
 
       // Liquid.
       if (t.layers.length) {
         ctx.save();
-        this._tubePath(ctx); ctx.closePath();
+        this._tubePath(ctx, g); ctx.closePath();
         ctx.clip();
         if (P.a === 0) this._drawLiquidUpright(t, now);
         else this._drawLiquidTilted(t, P, setLocal);
@@ -755,7 +817,7 @@
       const hi = t.lift > 0.05 || t.pose ? 0.85 : 0.5;
       ctx.lineWidth = g.wall;
       ctx.strokeStyle = `rgba(214,226,255,${hi})`;
-      this._tubePath(ctx);
+      this._tubePath(ctx, g);
       ctx.stroke();
       const sh = ctx.createLinearGradient(0, 0, 0, H);
       sh.addColorStop(0, 'rgba(255,255,255,0.0)');
@@ -768,18 +830,65 @@
       ctx.fillStyle = 'rgba(255,255,255,0.3)';
       roundRect(ctx, w * 0.72, H * 0.12, Math.max(1.5, w * 0.05), H * 0.12, w * 0.03);
       ctx.fill();
-      // Lip.
-      ctx.fillStyle = `rgba(222,232,255,${hi + 0.1})`;
+      // Lip. A reserved tube gets a band and rim in its color.
+      if (t.only >= 0) {
+        const col = PALETTE[t.only];
+        ctx.fillStyle = rgba(col, 0.85);
+        ctx.fillRect(0, g.wall * 1.1, w, Math.max(3, g.u * 0.16));
+        if (this.opts.symbols) drawSymbol(ctx, t.only, w / 2, g.wall * 1.1 + Math.max(3, g.u * 0.16) / 2, Math.max(2.5, g.u * 0.07), luminance(col) > 0.6 ? 'rgba(20,24,50,0.7)' : '#fff');
+      }
+      ctx.fillStyle = t.only >= 0 ? PALETTE[t.only] : `rgba(222,232,255,${hi + 0.1})`;
       roundRect(ctx, -g.wall * 1.3, -g.wall * 0.9, w + g.wall * 2.6, g.wall * 1.9, g.wall);
       ctx.fill();
 
       // Cork.
       if (t.cork > 0) this._drawCork(t);
+      if (t.lockVis > 0) this._drawLock(t, g);
+      ctx.restore();
+    }
+
+    /** A padlock in the key color over a dimmed tube; it lifts away as it opens. */
+    _drawLock(t, g) {
+      const ctx = this.ctx, w = g.w, H = g.H, k = t.lockVis;
+      const col = PALETTE[t.lockKey];
+      const opening = !t.locked;
+      ctx.save();
+      ctx.globalAlpha *= opening ? k : 1;
+      this._tubePath(ctx, g); ctx.closePath();
+      ctx.fillStyle = 'rgba(10,12,34,0.42)';
+      ctx.fill();
+      const bw = w * 0.78, bh = w * 0.6;
+      const cx = w / 2, cy = Math.min(H * 0.42, g.u * 1.6) + (opening ? -(1 - k) * g.u * 0.8 : 0);
+      const s = opening ? 1 + (1 - k) * 0.35 : 1;
+      ctx.translate(cx, cy); ctx.scale(s, s);
+      // Shackle (pops open while unlocking).
+      ctx.strokeStyle = col;
+      ctx.lineWidth = Math.max(2.5, w * 0.11);
+      ctx.lineCap = 'round';
+      const lift = opening ? (1 - k) * w * 0.25 : 0;
+      ctx.beginPath();
+      ctx.moveTo(-bw * 0.28, -bh * 0.1 - lift);
+      ctx.arc(0, -bh * 0.1 - bw * 0.02 - lift, bw * 0.28, Math.PI, 0);
+      ctx.lineTo(bw * 0.28, -bh * 0.1 + (opening ? -lift : 0));
+      ctx.stroke();
+      // Body.
+      ctx.fillStyle = col;
+      roundRect(ctx, -bw / 2, -bh * 0.1, bw, bh, w * 0.12);
+      ctx.fill();
+      ctx.strokeStyle = 'rgba(255,255,255,0.5)';
+      ctx.lineWidth = 1.2;
+      ctx.stroke();
+      if (this.opts.symbols) drawSymbol(ctx, t.lockKey, 0, bh * 0.4, w * 0.12, luminance(col) > 0.6 ? 'rgba(20,24,50,0.75)' : '#fff');
+      else {
+        ctx.fillStyle = 'rgba(10,12,34,0.55)';
+        ctx.beginPath(); ctx.arc(0, bh * 0.32, w * 0.07, 0, Math.PI * 2); ctx.fill();
+        ctx.fillRect(-w * 0.03, bh * 0.32, w * 0.06, bh * 0.22);
+      }
       ctx.restore();
     }
 
     _drawLiquidUpright(t, now) {
-      const ctx = this.ctx, g = this.geo, w = g.w, H = g.H;
+      const ctx = this.ctx, g = t.geo || this.geo, w = g.w, H = g.H;
       let v = 0;
       const total = volume(t.layers);
       const topY = H - total * g.u;
@@ -828,7 +937,7 @@
     }
 
     _drawLiquidTilted(t, P, setLocal) {
-      const ctx = this.ctx, g = this.geo, dpr = this.dpr, w = g.w;
+      const ctx = this.ctx, g = t.geo || this.geo, dpr = this.dpr, w = g.w;
       const c = Math.cos(P.a), s = Math.sin(P.a);
       const world = g.poly.map(([x, y]) => {
         const dx = x - P.kx;
@@ -872,7 +981,7 @@
     }
 
     _drawCork(t) {
-      const ctx = this.ctx, g = this.geo, w = g.w;
+      const ctx = this.ctx, g = t.geo || this.geo, w = g.w;
       const k = t.cork;
       const drop = k < 1 ? (1 - easeOutBack(k)) * -g.u * 1.6 : 0;
       const ch = g.neck * 1.05, cw = w * 0.86;
@@ -926,7 +1035,7 @@
         ctx.lineWidth = 2.5;
         ctx.setLineDash([6, 5]);
         ctx.lineDashOffset = -now / 40;
-        roundRect(ctx, pa.cx - g.w * 0.3, pa.cy - g.w * 0.45, g.w * 1.6, g.H + g.w * 0.75, g.w * 0.8);
+        roundRect(ctx, pa.cx - g.w * 0.3, pa.cy - g.w * 0.45, g.w * 1.6, A.geo.H + g.w * 0.75, g.w * 0.8);
         ctx.stroke();
         ctx.restore();
       }
