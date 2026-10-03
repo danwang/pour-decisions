@@ -14,7 +14,7 @@
   'use strict';
 
   const CFG = window.PourCloudConfig || {};
-  const enabled = !!(CFG.url && CFG.anonKey);
+  const enabled = !!(CFG.url && CFG.anonKey && CFG.game);
   const SDK = 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.2/dist/umd/supabase.js';
   const SDK_SRI = 'sha384-Rj26LVGvoeRVR6+mwQmFfcR3QOBEwT+ZmuCWpuiqeTzJpCs0ER4ITAWGb4Hiy3Ok';
   const AUTH_KEY = 'pour-decisions-auth';
@@ -109,7 +109,7 @@
     running = (async () => {
       const user = state.user.id;
       try {
-        const { data, error } = await client.from(TABLE).select('data').eq('user_id', user).maybeSingle();
+        const { data, error } = await client.from(TABLE).select('data').eq('user_id', user).eq('game', CFG.game).maybeSingle();
         if (error) throw error;
         let remote = data && data.data;
         if (remote && (remote.v || 1) > window.SortSave.SCHEMA) throw new Error('Your account was saved by a newer version. Reload to update.');
@@ -119,7 +119,9 @@
         if (next.syncedAs !== user) next = Object.assign({}, next, { syncedAs: user });
         if (stable(next) !== stable(local)) hooks.set(next);
         if (!remote || stable(next) !== stable(remote)) {
-          const { error: e2 } = await client.from(TABLE).upsert({ user_id: user, data: next, updated_at: new Date().toISOString() });
+          const { error: e2 } = await client.from(TABLE).upsert(
+            { user_id: user, game: CFG.game, data: next, updated_at: new Date().toISOString() },
+            { onConflict: 'user_id,game' });
           if (e2) throw e2;
         }
         state.syncedAt = Date.now();
