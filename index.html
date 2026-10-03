@@ -148,6 +148,29 @@
     </div>
   </div>
 
+  <!-- Daily calendar -->
+  <div class="overlay" id="dailySheet" hidden>
+    <div class="sheet">
+      <button class="icon-btn close" data-close aria-label="Close"><svg><use href="#i-close"/></svg></button>
+      <p class="eyebrow">Daily</p>
+      <h3>A new puzzle every day</h3>
+      <div class="cal-head">
+        <button class="icon-btn" id="calPrev" aria-label="Previous month"><svg><use href="#i-back"/></svg></button>
+        <b id="calMonth"></b>
+        <button class="icon-btn" id="calNext" aria-label="Next month"><svg class="flip"><use href="#i-back"/></svg></button>
+      </div>
+      <div class="cal" id="cal"></div>
+      <p class="cal-legend"><span class="k-done">Solved on the day</span><span class="k-late">Caught up</span></p>
+      <dl class="stats small">
+        <div><dt>Streak</dt><dd id="calStreak">0</dd></div>
+        <div><dt>Solved</dt><dd id="calSolved">0</dd></div>
+        <div><dt>Stars</dt><dd id="calStars">0</dd></div>
+      </dl>
+      <button class="btn primary wide" id="calToday">Play today’s puzzle</button>
+      <p class="cal-reset" id="calReset"></p>
+    </div>
+  </div>
+
   <!-- Settings -->
   <div class="overlay" id="settingsSheet" hidden>
     <div class="sheet">

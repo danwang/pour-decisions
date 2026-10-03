@@ -21,7 +21,7 @@ Opening `index.html` straight from disk also works, but then generation and hint
 - **Campaign.** 240 levels in 10 chapters that ramp quickly (8+ tubes by the end of chapter 1), each block of ten paced as warm-up, climb, breather, hard, breather, boss. Every level is open from the start; Play picks up after your furthest solve.
 - **Mechanics.** From chapter 3, new rules arrive one at a time, each with an intro level, then mix: tall and short tubes (chapter 3), tubes reserved for one color (4), move limits (5) and locked tubes that open when a color is finished (6). Returning players see "New" badges and a one-time card pointing at the first new level.
 - **Endless.** Puzzles generated on demand, with an Auto mode that adjusts difficulty to how you play, or six fixed tiers.
-- **Daily.** One seeded puzzle per day, with a streak.
+- **Daily.** One seeded puzzle per day, new at 00:00 UTC for everyone, with a streak and a calendar of past days. Missed days can be played as catch-ups, which earn stars but don't extend the streak.
 - **Assists.** Unlimited undo, restart, hints from the solver, and one extra tube per level. When a position can no longer be solved, the hint says so and offers to undo exactly back to the last solvable position.
 - **Feel.**
   - Tubes tilt around their lip, and the liquid stays level: each color band is a horizontal slice of the rotated tube, solved by area.
@@ -86,6 +86,8 @@ Open `/ads.html` to cycle through every ad with a picker, arrow keys and a count
 The home screen shows which commit is running, for example "build 6f74d50 · Sep 28, 14:02", linked to the commit on GitHub. The deploy build stamps `js/version.js` from the host's commit variable (Render's `RENDER_GIT_COMMIT`, Cloudflare's `CF_PAGES_COMMIT_SHA` or `WORKERS_CI_COMMIT_SHA`), falling back to `git rev-parse HEAD`. The committed `js/version.js` is a placeholder that shows "dev". `tools/serve.js` answers with the live local commit, marked "+local" when there are uncommitted changes.
 
 ## Deploying
+
+[SETUP.md](SETUP.md) covers hosting, sign-in, sync and email end to end.
 
 - **Cloudflare** (Workers or Pages): `node tools/test.js && node tools/build-site.js` builds `dist/`, which holds only what the site serves, with the version stamped and a `_headers` file for caching. For Workers, set that as the build command and `npx wrangler deploy` as the deploy command (`wrangler.jsonc` points at `dist/`); for Pages, set the output directory to `dist`.
 - **Render**: `render.yaml` stamps `js/version.js` in place and publishes the repo root.

@@ -90,9 +90,12 @@
     const da = a.daily || {}, db = b.daily || {};
     const done = Object.assign({}, db.done);
     for (const k of Object.keys(da.done || {})) done[k] = Math.max(done[k] || 0, da.done[k]);
+    const late = Object.assign({}, db.late);
+    for (const k of Object.keys(da.late || {})) late[k] = Math.max(late[k] || 0, da.late[k]);
+    for (const k of Object.keys(done)) delete late[k]; // solved on the day somewhere: that wins
     const last = (da.last || '') > (db.last || '') ? da.last : db.last || da.last || '';
     const sides = [da, db].filter((d) => d.last === last).map((d) => d.streak || 0);
-    out.daily = { done, last, streak: Math.max(streakTo(done, last), ...sides, 0) };
+    out.daily = { done, late, last, streak: Math.max(streakTo(done, last), ...sides, 0) };
 
     const s = (b.sessionAt || 0) > (a.sessionAt || 0) ? b : a;
     out.session = s.session || null;

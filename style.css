@@ -420,6 +420,33 @@ svg { width: 24px; height: 24px; flex: none; }
 .tier small { color: var(--muted); font-size: 12px; }
 .tier[aria-checked="true"] { border-color: var(--gold); background: rgba(255, 207, 90, 0.1); }
 
+/* Daily calendar. */
+.cal-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: -4px; }
+.cal-head b { font: 800 18px/1 var(--display); }
+.cal-head .flip { transform: scaleX(-1); }
+.cal-head .icon-btn:disabled { opacity: 0.3; cursor: default; }
+.cal { display: grid; grid-template-columns: repeat(7, 1fr); gap: 6px; }
+.cal-wd { text-align: center; font: 800 11px/1 var(--body); color: var(--faint); padding-block: 4px 2px; }
+.cal-day {
+  aspect-ratio: 1; min-width: 0;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px;
+  border-radius: 12px; border: 1.5px solid transparent;
+  background: rgba(255, 255, 255, 0.06); color: var(--muted);
+  font: 800 15px/1 var(--display); font-variant-numeric: tabular-nums;
+  transition: transform 90ms ease;
+}
+.cal-day i { font-style: normal; font-size: 8px; line-height: 1; letter-spacing: 1px; color: var(--gold); }
+.cal-day:active:not(:disabled) { transform: scale(0.92); }
+.cal-day.done { background: rgba(65, 214, 195, 0.2); color: var(--text); }
+.cal-day.late { background: transparent; border: 1.5px dashed rgba(65, 214, 195, 0.55); color: var(--text); }
+.cal-day.off { background: transparent; color: var(--faint); opacity: 0.45; cursor: default; }
+.cal-day.today { border: 2px solid var(--gold); color: var(--text); }
+.cal-reset { margin: -4px 0 0; text-align: center; font-size: 12px; color: var(--faint); }
+.cal-legend { margin: 0; display: flex; justify-content: center; gap: 16px; font-size: 12px; color: var(--muted); }
+.cal-legend span::before { content: ""; display: inline-block; width: 10px; height: 10px; margin-right: 6px; border-radius: 3px; vertical-align: -1px; }
+.cal-legend .k-done::before { background: rgba(65, 214, 195, 0.4); }
+.cal-legend .k-late::before { border: 1.5px dashed rgba(65, 214, 195, 0.7); }
+
 .toggles { display: flex; flex-direction: column; }
 .toggle {
   display: flex; align-items: center; justify-content: space-between; gap: 16px;

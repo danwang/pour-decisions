@@ -155,10 +155,22 @@ test('syncing two devices keeps every solve and the newer unfinished puzzle', ()
   assert.deepStrictEqual([m.newSince, m.newsSeen], [1, 3]);
   assert.deepStrictEqual(m.settings, { sound: true }, 'settings stay per device');
   assert.deepStrictEqual(m.endless, { auto: 3, choice: 'auto', solved: 9, streak: 4 });
-  assert.deepStrictEqual(m.daily, { done: { '2026-09-30': 2, '2026-10-01': 3, '2026-10-02': 1 }, streak: 3, last: '2026-10-02' });
+  assert.deepStrictEqual(m.daily, { done: { '2026-09-30': 2, '2026-10-01': 3, '2026-10-02': 1 }, late: {}, streak: 3, last: '2026-10-02' });
   assert.deepStrictEqual(m.session, { mode: 'campaign' });
   // A finished puzzle (session cleared later) beats an older unfinished one.
   assert.strictEqual(S.merge({ ...phone, session: null, sessionAt: 300 }, laptop, 'u').session, null);
+});
+
+test('daily catch-ups merge, but never count toward the streak', () => {
+  global.self = global;
+  require('../js/migrations.js');
+  const S = global.SortSave;
+  const a = { v: 2, progress: {}, settings: {}, endless: {}, daily: { done: { '2026-10-03': 3 }, late: { '2026-10-01': 2, '2026-09-30': 1 }, streak: 1, last: '2026-10-03' } };
+  const b = { v: 2, progress: {}, settings: {}, endless: {}, daily: { done: { '2026-10-01': 1 }, late: { '2026-09-30': 3 }, streak: 1, last: '2026-10-01' } };
+  const d = S.merge(a, b, 'u').daily;
+  assert.deepStrictEqual(d.late, { '2026-09-30': 3 }, 'a day solved on time anywhere leaves the catch-up list');
+  assert.deepStrictEqual(d.done, { '2026-10-01': 1, '2026-10-03': 3 });
+  assert.strictEqual(d.streak, 1, 'Oct 2 was never solved, so the streak is just Oct 3');
 });
 
 test('a reset made while signed in wins over devices that synced before it', () => {

@@ -40,7 +40,7 @@
     tutorialDone: false,
     settings: { sound: false, haptics: true, symbols: false, fast: false, reduced: reducedDefault, ads: true },
     endless: { auto: 1.2, choice: 'auto', solved: 0, streak: 0 },
-    daily: { done: {}, streak: 0, last: '' },
+    daily: { done: {}, late: {}, streak: 0, last: '' }, // done: solved on the day; late: caught up afterwards
     session: null,
   });
   let save = defaults();
@@ -285,10 +285,11 @@
     return s;
   }
   const needsTutorial = () => !save.tutorialDone && !Object.keys(save.progress).length;
-  const today = () => {
-    const d = new Date();
-    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-  };
+  const dayKey = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  const parseDay = (k) => { const [y, m, d] = k.split('-').map(Number); return new Date(y, m - 1, d); };
+  // The daily turns over at 00:00 UTC for everyone (evening in the Americas), so `today` is the UTC date.
+  const today = () => new Date().toISOString().slice(0, 10);
+  const dayBefore = (k) => { const d = parseDay(k); d.setDate(d.getDate() - 1); return dayKey(d); };
 
   function refreshHome() {
     const s = liveSession();
@@ -335,7 +336,7 @@
     else startCampaign(nextUp());
   });
   $('#levelsBtn').addEventListener('click', () => { Sound.unlock(); Sound.tap(); nav.go('levels'); });
-  $('#dailyBtn').addEventListener('click', () => { Sound.unlock(); Sound.tap(); startDaily(); });
+  $('#dailyBtn').addEventListener('click', () => { Sound.unlock(); openDaily(); });
   $('#endlessBtn').addEventListener('click', () => { Sound.unlock(); renderTiers(); openSheet('endlessSheet'); });
   $('#settingsBtn').addEventListener('click', () => { Sound.unlock(); openSheet('settingsSheet'); });
   $('#accountBtn').addEventListener('click', () => { Sound.unlock(); openSheet('accountSheet'); });
@@ -503,8 +504,8 @@
 
   // --------------------------------------------------------------- daily --
 
-  async function startDaily() {
-    const day = today();
+  /** Any day's puzzle can be rebuilt from its date, so past days are playable as catch-ups. */
+  async function startDaily(day = today()) {
     const seed = C.hashString('daily-' + day);
     const spec = C.specForTarget(C.TIERS[3].target, C.mulberry32(seed), 'daily');
     showLoading(true);
@@ -512,14 +513,77 @@
     try {
       const p = await work('generate', { spec, seed, candidates: 18 });
       showLoading(false);
-      const d = new Date();
-      const label = d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+      const label = parseDay(day).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
       begin('daily', 0, recolor({ ...p, kind: 'daily', title: `Daily · ${label}`, day }, seed));
     } catch (e) {
       showLoading(false);
-      toast('Could not load today’s puzzle.');
+      toast('Could not load that puzzle. Try again.');
     }
   }
+
+  // Calendar of dailies. Solving on the day builds the streak; catching up
+  // on a missed day earns its stars but not the streak.
+  const DAILY_START = '2026-09-26'; // the first daily puzzle
+  let calMonth = null; // first of the month being shown
+
+  function currentStreak() {
+    const D = save.daily;
+    return D.last === today() || D.last === dayBefore(today()) ? D.streak : 0;
+  }
+
+  function openDaily() {
+    const t = parseDay(today());
+    calMonth = new Date(t.getFullYear(), t.getMonth(), 1);
+    renderCalendar();
+    openSheet('dailySheet');
+  }
+
+  function renderCalendar() {
+    const D = save.daily, late = D.late || {}, t = today();
+    const y = calMonth.getFullYear(), m = calMonth.getMonth();
+    const monthIndex = (d) => d.getFullYear() * 12 + d.getMonth();
+    $('#calMonth').textContent = calMonth.toLocaleDateString(undefined, { month: 'long', year: 'numeric' });
+    $('#calPrev').disabled = monthIndex(calMonth) <= monthIndex(parseDay(DAILY_START));
+    $('#calNext').disabled = monthIndex(calMonth) >= monthIndex(parseDay(t));
+
+    const grid = $('#cal');
+    grid.textContent = '';
+    for (let i = 0; i < 7; i++) {
+      const w = document.createElement('span');
+      w.className = 'cal-wd';
+      w.textContent = new Date(2023, 0, 1 + i).toLocaleDateString(undefined, { weekday: 'narrow' }); // Jan 1 2023 was a Sunday
+      grid.appendChild(w);
+    }
+    for (let i = new Date(y, m, 1).getDay(); i > 0; i--) grid.appendChild(document.createElement('span'));
+    for (let d = 1, n = new Date(y, m + 1, 0).getDate(); d <= n; d++) {
+      const date = new Date(y, m, d), k = dayKey(date);
+      const stars = D.done[k] || late[k] || 0;
+      const state = k > t || k < DAILY_START ? 'off' : D.done[k] ? 'done' : late[k] ? 'late' : 'open';
+      const b = document.createElement('button');
+      b.className = `cal-day ${state}${k === t ? ' today' : ''}`;
+      b.disabled = state === 'off';
+      b.innerHTML = `<span>${d}</span>${stars ? `<i>${'★'.repeat(stars)}</i>` : ''}`;
+      const when = date.toLocaleDateString(undefined, { month: 'long', day: 'numeric' });
+      b.setAttribute('aria-label', `${when}${k === t ? ', today' : ''}: ${{
+        done: `solved, ${stars} star${stars === 1 ? '' : 's'}`, late: `caught up, ${stars} star${stars === 1 ? '' : 's'}`,
+        open: k === t ? 'not solved yet' : 'missed, play to catch up', off: 'not available',
+      }[state]}`);
+      b.addEventListener('click', () => { Sound.tap(); startDaily(k); });
+      grid.appendChild(b);
+    }
+
+    const all = [...Object.values(D.done), ...Object.values(late)];
+    $('#calStreak').textContent = currentStreak();
+    $('#calSolved').textContent = all.length;
+    $('#calStars').textContent = all.reduce((a, s) => a + s, 0);
+    $('#calToday').textContent = D.done[t] ? 'Replay today’s puzzle' : 'Play today’s puzzle';
+    const next = new Date(); next.setUTCHours(24, 0, 0, 0); // the next turnover, so daylight saving is right
+    const reset = next.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
+    $('#calReset').textContent = `New puzzle every day at ${reset} your time.`;
+  }
+  $('#calPrev').addEventListener('click', () => { Sound.tap(); calMonth.setMonth(calMonth.getMonth() - 1); renderCalendar(); });
+  $('#calNext').addEventListener('click', () => { Sound.tap(); calMonth.setMonth(calMonth.getMonth() + 1); renderCalendar(); });
+  $('#calToday').addEventListener('click', () => { Sound.tap(); startDaily(); });
 
   // ------------------------------------------------------------ campaign --
 
@@ -1044,15 +1108,21 @@
     } else if (G.mode === 'daily') {
       const D = save.daily;
       const day = G.puzzle.day || today();
-      if (!D.done[day]) {
-        const y = new Date(); y.setDate(y.getDate() - 1);
-        const yKey = `${y.getFullYear()}-${String(y.getMonth() + 1).padStart(2, '0')}-${String(y.getDate()).padStart(2, '0')}`;
-        D.streak = D.last === yKey ? D.streak + 1 : 1;
-        D.last = day;
+      if (day === today() || D.done[day]) {
+        if (!D.done[day]) {
+          D.streak = D.last === dayBefore(day) ? D.streak + 1 : 1;
+          D.last = day;
+        }
+        D.done[day] = Math.max(D.done[day] || 0, stars);
+        title = 'Daily done!';
+        note += ` Streak: ${D.streak} day${D.streak === 1 ? '' : 's'}.`;
+      } else {
+        // A missed day, caught up: its stars count, the streak doesn't.
+        D.late = D.late || {};
+        D.late[day] = Math.max(D.late[day] || 0, stars);
+        title = 'Caught up!';
+        note += ' Streaks only count solves on the day.';
       }
-      D.done[day] = Math.max(D.done[day] || 0, stars);
-      title = 'Daily done!';
-      note += ` Streak: ${D.streak} day${D.streak === 1 ? '' : 's'}.`;
       next = 'Play Endless';
     }
     save.session = null;
