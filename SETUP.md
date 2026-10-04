@@ -44,6 +44,15 @@ The primary key is `(user_id, game)`. Row-level security limits each signed-in p
   - *URL Configuration*: Site URL `https://pour.peanutstar.com`; Redirect URLs list every address the game runs on, each ending in `/**` (the live site, `http://localhost:8173/**`, `http://localhost:8174/**`). A link requested from an unlisted address goes to the Site URL instead.
   - *Email Templates*: paste [supabase/email-sign-in.html](supabase/email-sign-in.html) into both **Magic link or OTP** and **Confirm signup** (a first sign-in uses the second). Subject: `Your Pour Decisions code: {{ .Token }}`. The dashboard preview shows the placeholders literally; real emails fill them in.
 
+### Bot check (Cloudflare Turnstile)
+
+Sign-up is open to anyone, so sending a sign-in email requires passing Cloudflare Turnstile. That keeps the form from being used to spam addresses. Most players never see it: the widget runs only when they tap Send, and shows a "verify you're human" box only when Cloudflare is unsure.
+
+- **Cloudflare → Turnstile:** a widget (Managed mode) whose hostnames are `pour.peanutstar.com` and `localhost`. Its **site key** is public and goes in `turnstileSiteKey` in `js/cloud-config.js`. Its **secret key** goes only into Supabase.
+- **Supabase → Authentication → Attack Protection (Bot and Abuse Protection):** CAPTCHA protection on, provider Turnstile, with the widget's secret key. Supabase then rejects sign-in requests without a valid token. Entering the emailed code doesn't need one.
+- **Order matters:** deploy the site key first, then turn on CAPTCHA in Supabase. In the other order, sign-in fails until the site key is live.
+- **Testing:** Cloudflare's test site keys work on any host: `1x00000000000000000000AA` always passes, and `3x00000000000000000000FF` always shows the interactive box.
+
 ### Email
 
 Pending. Supabase's built-in email only reaches members of the Supabase organization and is heavily rate-limited, and editing templates requires custom SMTP. The plan is Resend (free tier):

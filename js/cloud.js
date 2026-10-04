@@ -159,9 +159,50 @@
     state.busy = false; render();
   }
 
+  // Bot check (Cloudflare Turnstile) before sending a sign-in email, so the
+  // form can't be used to spam addresses. Supabase verifies the token. The
+  // widget stays invisible unless Cloudflare wants an interaction; it runs
+  // only on Send.
+  const TURNSTILE = 'https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit';
+  let turnstileLoad = null, widget = null, waiting = null;
+  function turnstile() {
+    if (!turnstileLoad) {
+      turnstileLoad = new Promise((resolve, reject) => {
+        const s = document.createElement('script');
+        s.src = TURNSTILE;
+        s.onload = () => resolve(window.turnstile);
+        s.onerror = () => { turnstileLoad = null; reject(new Error('Couldn’t load the bot check. Check your connection and try again.')); };
+        document.head.appendChild(s);
+      });
+    }
+    return turnstileLoad;
+  }
+  /** A fresh single-use token, or undefined when no site key is configured. */
+  async function captchaToken() {
+    if (!CFG.turnstileSiteKey) return undefined;
+    const ts = await turnstile();
+    return new Promise((resolve, reject) => {
+      const settle = (err, token) => { const w = waiting; waiting = null; if (w) err ? w.reject(err) : w.resolve(token); };
+      waiting = { resolve, reject };
+      if (widget == null) {
+        widget = ts.render('#acctCaptcha', {
+          sitekey: CFG.turnstileSiteKey,
+          theme: 'dark',
+          appearance: 'interaction-only',
+          execution: 'execute',
+          callback: (token) => settle(null, token),
+          'error-callback': () => { settle(new Error('Couldn’t confirm you’re not a bot. Try again.')); return true; },
+          'timeout-callback': () => settle(new Error('The bot check timed out. Try again.')),
+        });
+      } else ts.reset(widget);
+      ts.execute(widget);
+    });
+  }
+
   function sendCode(email) {
     return act(async (c) => {
-      const { error } = await c.auth.signInWithOtp({ email, options: { emailRedirectTo: location.origin + location.pathname } });
+      const captcha = await captchaToken();
+      const { error } = await c.auth.signInWithOtp({ email, options: { emailRedirectTo: location.origin + location.pathname, captchaToken: captcha } });
       if (error) throw error;
       setPending(email);
     });

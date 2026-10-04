@@ -515,6 +515,8 @@ svg { width: 24px; height: 24px; flex: none; }
 .acct-in b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .acct-in small { color: var(--muted); font-size: 13px; }
 .acct-in .link-btn { flex: none; }
+.acct-captcha:empty { display: none; }
+.acct-captcha { display: flex; justify-content: center; }
 .acct-error { margin: 0; color: #ffb3bf; font-size: 14px; }
 .account button:disabled, .account input:disabled { opacity: 0.55; cursor: default; }
 
