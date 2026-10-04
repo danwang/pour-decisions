@@ -513,7 +513,8 @@
     try {
       const p = await work('generate', { spec, seed, candidates: 18 });
       showLoading(false);
-      const label = parseDay(day).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+      const sameYear = day.slice(0, 4) === today().slice(0, 4);
+      const label = parseDay(day).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: sameYear ? undefined : 'numeric' });
       begin('daily', 0, recolor({ ...p, kind: 'daily', title: `Daily · ${label}`, day }, seed));
     } catch (e) {
       showLoading(false);
@@ -521,10 +522,12 @@
     }
   }
 
-  // Calendar of dailies. Solving on the day builds the streak; catching up
-  // on a missed day earns its stars but not the streak.
-  const DAILY_START = '2026-09-26'; // the first daily puzzle
-  let calMonth = null; // first of the month being shown
+  // Calendar of dailies. Every past day can be played: solving on the day
+  // builds the streak; catching up on another day earns its stars only.
+  // Tapping the month title switches to a month picker for the year.
+  const CAL_FIRST_YEAR = 2000; // how far back the calendar goes
+  let calMonth = null;   // first of the month being shown
+  let calPicking = false; // showing the month picker instead of days
 
   function currentStreak() {
     const D = save.daily;
@@ -534,19 +537,54 @@
   function openDaily() {
     const t = parseDay(today());
     calMonth = new Date(t.getFullYear(), t.getMonth(), 1);
+    calPicking = false;
     renderCalendar();
     openSheet('dailySheet');
   }
 
-  function renderCalendar() {
-    const D = save.daily, late = D.late || {}, t = today();
-    const y = calMonth.getFullYear(), m = calMonth.getMonth();
-    const monthIndex = (d) => d.getFullYear() * 12 + d.getMonth();
-    $('#calMonth').textContent = calMonth.toLocaleDateString(undefined, { month: 'long', year: 'numeric' });
-    $('#calPrev').disabled = monthIndex(calMonth) <= monthIndex(parseDay(DAILY_START));
-    $('#calNext').disabled = monthIndex(calMonth) >= monthIndex(parseDay(t));
+  const plural = (n, one, many = one + 's') => `${n} ${n === 1 ? one : many}`;
 
+  function renderCalendar() {
+    const D = save.daily, late = D.late || {}, t = today(), now = parseDay(t);
+    const y = calMonth.getFullYear(), m = calMonth.getMonth();
+    const title = $('#calTitle');
+    title.setAttribute('aria-expanded', calPicking);
+    if (calPicking) {
+      title.textContent = y;
+      $('#calPrev').disabled = y <= CAL_FIRST_YEAR;
+      $('#calNext').disabled = y >= now.getFullYear();
+      $('#calPrev').setAttribute('aria-label', 'Previous year');
+      $('#calNext').setAttribute('aria-label', 'Next year');
+      renderMonths(y, now);
+    } else {
+      const monthIndex = (d) => d.getFullYear() * 12 + d.getMonth();
+      title.textContent = calMonth.toLocaleDateString(undefined, { month: 'long', year: 'numeric' });
+      $('#calPrev').disabled = monthIndex(calMonth) <= CAL_FIRST_YEAR * 12;
+      $('#calNext').disabled = monthIndex(calMonth) >= monthIndex(now);
+      $('#calPrev').setAttribute('aria-label', 'Previous month');
+      $('#calNext').setAttribute('aria-label', 'Next month');
+      renderDays(y, m, t);
+    }
+
+    const all = [...Object.values(D.done), ...Object.values(late)];
+    $('#calStreak').textContent = currentStreak();
+    $('#calSolved').textContent = all.length;
+    $('#calStars').textContent = all.reduce((a, n) => a + n, 0);
+
+    // Today's button: an invitation until it's solved, then a record of it.
+    const btn = $('#calToday'), got = D.done[t] || 0;
+    btn.classList.toggle('primary', !got);
+    btn.classList.toggle('ghost', !!got);
+    btn.innerHTML = got
+      ? `Solved today <span class="cal-stars"><b>${'★'.repeat(got)}</b>${'★'.repeat(3 - got)}</span><small>· Replay</small>`
+      : 'Play today’s puzzle';
+    btn.setAttribute('aria-label', got ? `Solved today, ${plural(got, 'star')}. Replay` : 'Play today’s puzzle');
+  }
+
+  function renderDays(y, m, t) {
+    const D = save.daily, late = D.late || {};
     const grid = $('#cal');
+    grid.className = 'cal';
     grid.textContent = '';
     for (let i = 0; i < 7; i++) {
       const w = document.createElement('span');
@@ -558,28 +596,52 @@
     for (let d = 1, n = new Date(y, m + 1, 0).getDate(); d <= n; d++) {
       const date = new Date(y, m, d), k = dayKey(date);
       const stars = D.done[k] || late[k] || 0;
-      const state = k > t || k < DAILY_START ? 'off' : D.done[k] ? 'done' : late[k] ? 'late' : 'open';
+      const state = k > t ? 'off' : D.done[k] ? 'done' : late[k] ? 'late' : 'open';
       const b = document.createElement('button');
       b.className = `cal-day ${state}${k === t ? ' today' : ''}`;
       b.disabled = state === 'off';
       b.innerHTML = `<span>${d}</span>${stars ? `<i>${'★'.repeat(stars)}</i>` : ''}`;
-      const when = date.toLocaleDateString(undefined, { month: 'long', day: 'numeric' });
+      const when = date.toLocaleDateString(undefined, { month: 'long', day: 'numeric', year: 'numeric' });
       b.setAttribute('aria-label', `${when}${k === t ? ', today' : ''}: ${{
-        done: `solved, ${stars} star${stars === 1 ? '' : 's'}`, late: `caught up, ${stars} star${stars === 1 ? '' : 's'}`,
-        open: k === t ? 'not solved yet' : 'missed, play to catch up', off: 'not available',
+        done: `solved, ${plural(stars, 'star')}`, late: `caught up, ${plural(stars, 'star')}`,
+        open: k === t ? 'not solved yet' : 'not played, play to catch up', off: 'not available yet',
       }[state]}`);
       b.addEventListener('click', () => { Sound.tap(); startDaily(k); });
       grid.appendChild(b);
     }
-
-    const all = [...Object.values(D.done), ...Object.values(late)];
-    $('#calStreak').textContent = currentStreak();
-    $('#calSolved').textContent = all.length;
-    $('#calStars').textContent = all.reduce((a, s) => a + s, 0);
-    $('#calToday').textContent = D.done[t] ? 'Replay today’s puzzle' : 'Play today’s puzzle';
   }
-  $('#calPrev').addEventListener('click', () => { Sound.tap(); calMonth.setMonth(calMonth.getMonth() - 1); renderCalendar(); });
-  $('#calNext').addEventListener('click', () => { Sound.tap(); calMonth.setMonth(calMonth.getMonth() + 1); renderCalendar(); });
+
+  function renderMonths(y, now) {
+    const D = save.daily, late = D.late || {};
+    const solvedIn = {};
+    for (const k of [...Object.keys(D.done), ...Object.keys(late)]) {
+      if (k.startsWith(`${y}-`)) solvedIn[+k.slice(5, 7) - 1] = (solvedIn[+k.slice(5, 7) - 1] || 0) + 1;
+    }
+    const grid = $('#cal');
+    grid.className = 'cal months';
+    grid.textContent = '';
+    for (let m = 0; m < 12; m++) {
+      const date = new Date(y, m, 1), n = solvedIn[m] || 0;
+      const b = document.createElement('button');
+      const future = y > now.getFullYear() || (y === now.getFullYear() && m > now.getMonth());
+      b.className = 'cal-month' + (y === now.getFullYear() && m === now.getMonth() ? ' today' : '')
+        + (y === calMonth.getFullYear() && m === calMonth.getMonth() ? ' shown' : '');
+      b.disabled = future;
+      b.innerHTML = `<span>${date.toLocaleDateString(undefined, { month: 'short' })}</span>${n ? `<small>${n}</small>` : ''}`;
+      b.setAttribute('aria-label', `${date.toLocaleDateString(undefined, { month: 'long', year: 'numeric' })}${n ? `, ${plural(n, 'daily', 'dailies')} solved` : ''}`);
+      b.addEventListener('click', () => { Sound.tap(); calMonth = date; calPicking = false; renderCalendar(); });
+      grid.appendChild(b);
+    }
+  }
+
+  const calStep = (dir) => {
+    if (calPicking) calMonth.setFullYear(calMonth.getFullYear() + dir);
+    else calMonth.setMonth(calMonth.getMonth() + dir);
+    renderCalendar();
+  };
+  $('#calPrev').addEventListener('click', () => { Sound.tap(); calStep(-1); });
+  $('#calNext').addEventListener('click', () => { Sound.tap(); calStep(1); });
+  $('#calTitle').addEventListener('click', () => { Sound.tap(); calPicking = !calPicking; renderCalendar(); });
   $('#calToday').addEventListener('click', () => { Sound.tap(); startDaily(); });
 
   // ------------------------------------------------------------ campaign --

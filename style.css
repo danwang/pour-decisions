@@ -424,7 +424,14 @@ svg { width: 24px; height: 24px; flex: none; }
 
 /* Daily calendar. */
 .cal-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: -4px; }
-.cal-head b { font: 800 18px/1 var(--display); }
+.cal-title {
+  display: inline-flex; align-items: center; gap: 6px;
+  min-height: 44px; padding-inline: 12px; border-radius: 12px;
+  font: 800 18px/1 var(--display);
+}
+.cal-title::after { content: "▾"; font-size: 12px; color: var(--muted); transition: transform 160ms; }
+.cal-title[aria-expanded="true"]::after { transform: rotate(180deg); }
+.cal-title:active { background: rgba(255, 255, 255, 0.06); }
 .cal-head .flip { transform: scaleX(-1); }
 .cal-head .icon-btn:disabled { opacity: 0.3; cursor: default; }
 .cal { display: grid; grid-template-columns: repeat(7, 1fr); gap: 6px; }
@@ -443,6 +450,22 @@ svg { width: 24px; height: 24px; flex: none; }
 .cal-day.late { background: transparent; border: 1.5px dashed rgba(65, 214, 195, 0.55); color: var(--text); }
 .cal-day.off { background: transparent; color: var(--faint); opacity: 0.45; cursor: default; }
 .cal-day.today { border: 2px solid var(--gold); color: var(--text); }
+/* Month picker: about the footprint of a five-week month, so the sheet barely moves. */
+.cal.months { grid-template-columns: repeat(3, 1fr); grid-template-rows: repeat(4, 1fr); aspect-ratio: 7 / 5.5; gap: 8px; }
+.cal-month {
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px;
+  border-radius: 14px; border: 1.5px solid transparent;
+  background: rgba(255, 255, 255, 0.06); color: var(--text);
+  font: 800 16px/1 var(--display);
+}
+.cal-month small { font: 800 11px/1 var(--body); color: var(--teal); }
+.cal-month.shown { background: rgba(65, 214, 195, 0.16); }
+.cal-month.today { border-color: var(--gold); }
+.cal-month:disabled { opacity: 0.35; cursor: default; }
+.cal-month:active:not(:disabled) { transform: scale(0.95); }
+#calToday .cal-stars { color: rgba(255, 255, 255, 0.2); letter-spacing: 2px; }
+#calToday .cal-stars b { color: var(--gold); font-weight: inherit; }
+#calToday small { font: 700 14px/1 var(--body); color: var(--muted); }
 
 .toggles { display: flex; flex-direction: column; }
 .toggle {
