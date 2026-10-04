@@ -191,7 +191,8 @@
           appearance: 'interaction-only',
           execution: 'execute',
           callback: (token) => settle(null, token),
-          'error-callback': () => { settle(new Error('Couldn’t confirm you’re not a bot. Try again.')); return true; },
+          // The code says why (cloudflare.com/turnstile error codes): 1102xx is the domain, 2005xx a blocked iframe, 3xxxxx/6xxxxx a failed challenge.
+          'error-callback': (code) => { settle(new Error(`Couldn’t confirm you’re not a bot (error ${code}). Try again.`)); return true; },
           'timeout-callback': () => settle(new Error('The bot check timed out. Try again.')),
         });
       } else ts.reset(widget);
